@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { guestbook, addGuestbookEntry, deleteGuestbookEntry } from '../../services/storage'
 import { Send, Trash2, Heart } from 'lucide-vue-next'
 
@@ -7,6 +7,10 @@ const author = ref('')
 const password = ref('')
 const message = ref('')
 const isSubmitting = ref(false)
+
+const visibleGuestbook = computed(() => {
+  return guestbook.value.filter(entry => !entry.isHidden)
+})
 
 const handleAddComment = () => {
   if (!author.value.trim() || !message.value.trim()) {
@@ -101,7 +105,7 @@ const formatDate = (isoString: string) => {
 
     <!-- Messages List Feed -->
     <div class="guestbook-feed font-sans">
-      <div v-for="entry in guestbook" :key="entry.id" class="comment-card">
+      <div v-for="entry in visibleGuestbook" :key="entry.id" class="comment-card">
         <div class="comment-header">
           <div class="author-wrap">
             <Heart :size="13" class="heart-icon" />
@@ -122,7 +126,7 @@ const formatDate = (isoString: string) => {
         <p class="comment-body">{{ entry.message }}</p>
       </div>
 
-      <div v-if="guestbook.length === 0" class="empty-guestbook">
+      <div v-if="visibleGuestbook.length === 0" class="empty-guestbook">
         <p>첫 번째 축하 메시지를 남겨주세요!</p>
       </div>
     </div>

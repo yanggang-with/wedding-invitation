@@ -166,6 +166,22 @@ export function setCoverPhotoItem(id: string) {
   })
 }
 
+export function updatePhotoItem(id: string, updates: Partial<Omit<PhotoItem, 'id'>>) {
+  const photo = photos.value.find(p => p.id === id)
+  if (photo) {
+    Object.assign(photo, updates)
+  }
+}
+
+export function reorderPhotos(fromIndex: number, toIndex: number) {
+  if (fromIndex < 0 || fromIndex >= photos.value.length || toIndex < 0 || toIndex >= photos.value.length) return
+  const item = photos.value.splice(fromIndex, 1)[0]
+  photos.value.splice(toIndex, 0, item)
+  photos.value.forEach((p, idx) => {
+    p.order = idx
+  })
+}
+
 export function movePhotoItem(index: number, direction: 'up' | 'down') {
   const targetIndex = direction === 'up' ? index - 1 : index + 1
   if (targetIndex < 0 || targetIndex >= photos.value.length) return

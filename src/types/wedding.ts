@@ -76,6 +76,7 @@ export interface GuestbookItem {
   author: string
   message: string
   password?: string
+  isHidden?: boolean
   createdAt: string
 }
 
