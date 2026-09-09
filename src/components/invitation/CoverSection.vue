@@ -1,28 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { photos, weddingInfo } from '../../services/storage'
+import { photos, weddingInfo, formatWeddingDate } from '../../services/storage'
 import { Heart } from 'lucide-vue-next'
 
 const coverPhoto = computed(() => {
-  const found = photos.value.find(p => p.isCover)
-  return found ? found.url : (photos.value[0]?.url || '')
+  const visiblePhotos = photos.value.filter(p => !p.isHidden)
+  const found = visiblePhotos.find(p => p.isCover)
+  return found ? found.url : (visiblePhotos[0]?.url || '')
 })
 
 const formattedDate = computed(() => {
-  const d = new Date(weddingInfo.value.date)
-  if (isNaN(d.getTime())) return ''
-  const year = d.getFullYear()
-  const month = d.getMonth() + 1
-  const date = d.getDate()
-  const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
-  const dayName = days[d.getDay()]
-  const hours = d.getHours()
-  const minutes = d.getMinutes()
-  const ampm = hours < 12 ? '오전' : '오후'
-  const displayHours = hours % 12 === 0 ? 12 : hours % 12
-  const minuteStr = minutes > 0 ? ` ${minutes}분` : ''
-
-  return `${year}년 ${month}월 ${date}일 ${dayName} ${ampm} ${displayHours}시${minuteStr}`
+  return formatWeddingDate(
+    weddingInfo.value.date,
+    weddingInfo.value.dateFormat,
+    weddingInfo.value.customDateFormat
+  )
 })
 
 const englishDate = computed(() => {

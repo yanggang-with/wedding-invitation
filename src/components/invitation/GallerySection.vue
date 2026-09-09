@@ -8,7 +8,9 @@ const isExpanded = ref(false)
 const INITIAL_COUNT = 6
 
 const sortedPhotos = computed(() => {
-  return [...photos.value].sort((a, b) => a.order - b.order)
+  return photos.value
+    .filter(p => !p.isHidden)
+    .sort((a, b) => a.order - b.order)
 })
 
 const displayedPhotos = computed(() => {

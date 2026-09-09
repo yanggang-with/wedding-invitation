@@ -3,6 +3,7 @@ export interface PhotoItem {
   url: string
   caption?: string
   isCover?: boolean
+  isHidden?: boolean
   order: number
   createdAt: string
 }
@@ -41,6 +42,8 @@ export interface WeddingInfo {
   groom: PersonInfo
   bride: PersonInfo
   date: string // ISO string '2026-10-24T12:30:00'
+  dateFormat?: string // e.g. 'YYYY년 M월 D일 dddd A h시'
+  customDateFormat?: string
   venue: VenueInfo
   greeting: GreetingInfo
   bgmUrl: string

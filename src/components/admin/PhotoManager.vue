@@ -7,7 +7,8 @@ import {
   deletePhotoItem,
   setCoverPhotoItem,
   updatePhotoItem,
-  reorderPhotos
+  reorderPhotos,
+  togglePhotoVisibility
 } from '../../services/storage'
 import type { PhotoItem } from '../../types/wedding'
 import {
@@ -20,7 +21,9 @@ import {
   X,
   Edit3,
   GripVertical,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-vue-next'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -38,7 +41,8 @@ const editForm = ref({
   id: '',
   url: '',
   caption: '',
-  isCover: false
+  isCover: false,
+  isHidden: false
 })
 const isReplacingImage = ref(false)
 
@@ -49,6 +53,10 @@ const dragOverIndex = ref<number | null>(null)
 const sortedPhotos = computed(() => {
   return [...photos.value].sort((a, b) => a.order - b.order)
 })
+
+const visibleCount = computed(() => photos.value.filter(p => !p.isHidden).length)
+const hiddenCount = computed(() => photos.value.filter(p => p.isHidden).length)
+const totalCount = computed(() => photos.value.length)
 
 const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement
@@ -107,7 +115,8 @@ const openEditModal = (photo: PhotoItem) => {
     id: photo.id,
     url: photo.url,
     caption: photo.caption || '',
-    isCover: !!photo.isCover
+    isCover: !!photo.isCover,
+    isHidden: !!photo.isHidden
   }
   isEditModalOpen.value = true
 }
@@ -144,7 +153,8 @@ const saveEditModal = () => {
   updatePhotoItem(editForm.value.id, {
     url: editForm.value.url.trim(),
     caption: editForm.value.caption.trim(),
-    isCover: editForm.value.isCover
+    isCover: editForm.value.isCover,
+    isHidden: editForm.value.isHidden
   })
   if (editForm.value.isCover) {
     setCoverPhotoItem(editForm.value.id)
@@ -193,9 +203,24 @@ const handleDragEnd = () => {
   <div class="photo-manager font-sans">
     <div class="manager-header">
       <div>
-        <h3 class="manager-title font-serif">웨딩 사진 관리</h3>
+        <div class="title-with-stats">
+          <h3 class="manager-title font-serif">웨딩 사진 관리</h3>
+          <div class="stats-pills">
+            <span class="stat-badge visible" title="청첩장에 보여지는 사진 수">
+              <Eye :size="13" />
+              <span>노출 중 <strong>{{ visibleCount }}</strong>장</span>
+            </span>
+            <span v-if="hiddenCount > 0" class="stat-badge hidden" title="청첩장에서 숨김 처리된 사진 수">
+              <EyeOff :size="13" />
+              <span>숨김 <strong>{{ hiddenCount }}</strong>장</span>
+            </span>
+            <span class="stat-badge total">
+              전체 <strong>{{ totalCount }}</strong>장
+            </span>
+          </div>
+        </div>
         <p class="manager-desc">
-          청첩장에 노출될 사진을 관리합니다. 사진을 드래그하여 3x3 그리드 순서를 자유롭게 변경할 수 있습니다. (현재 {{ photos.length }}장)
+          청첩장에 노출될 사진을 관리합니다. 사진을 드래그하여 3x3 그리드 순서를 변경하거나 보이기/숨기기를 설정할 수 있습니다.
         </p>
       </div>
 
@@ -257,6 +282,7 @@ const handleDragEnd = () => {
         class="photo-card"
         :class="{
           'is-cover': photo.isCover,
+          'is-hidden': photo.isHidden,
           'is-dragging': draggedIndex === index,
           'is-drag-over': dragOverIndex === index && draggedIndex !== index
         }"
@@ -282,11 +308,26 @@ const handleDragEnd = () => {
             <span>대표</span>
           </div>
 
+          <!-- Hidden Badge -->
+          <div v-if="photo.isHidden" class="hidden-badge font-sans">
+            <EyeOff :size="11" />
+            <span>숨김</span>
+          </div>
+
           <!-- Action Hover Overlay -->
           <div class="thumb-overlay">
             <button class="overlay-btn edit-btn" @click="openEditModal(photo)" title="사진 수정">
               <Edit3 :size="14" />
               <span>수정</span>
+            </button>
+            <button
+              class="overlay-btn toggle-btn"
+              @click="togglePhotoVisibility(photo.id)"
+              :title="photo.isHidden ? '청첩장에 노출하기' : '청첩장에서 숨기기'"
+            >
+              <Eye v-if="photo.isHidden" :size="14" />
+              <EyeOff v-else :size="14" />
+              <span>{{ photo.isHidden ? '보이기' : '숨기기' }}</span>
             </button>
             <button class="overlay-btn delete-btn" @click="handleDelete(photo.id)" title="사진 삭제">
               <Trash2 :size="14" />
@@ -298,27 +339,40 @@ const handleDragEnd = () => {
         <div class="photo-details">
           <div class="caption-display" :title="photo.caption || '설명 없음'">
             <span v-if="photo.caption" class="caption-text">{{ photo.caption }}</span>
-            <span v-else class="caption-empty">설명 없음 (수정 버튼 클릭)</span>
+            <span v-else class="caption-empty">설명 없음 (수정 클릭)</span>
           </div>
 
           <div class="card-bottom-actions">
             <button
-              v-if="!photo.isCover"
-              class="cover-action-btn"
-              @click="handleSetCover(photo.id)"
+              class="visibility-pill-btn"
+              :class="{ 'is-hidden-state': photo.isHidden }"
+              @click="togglePhotoVisibility(photo.id)"
+              :title="photo.isHidden ? '청첩장에 노출하기' : '청첩장에서 숨기기'"
             >
-              <Star :size="12" />
-              <span>대표 설정</span>
+              <EyeOff v-if="photo.isHidden" :size="12" />
+              <Eye v-else :size="12" />
+              <span>{{ photo.isHidden ? '숨김됨' : '보이기' }}</span>
             </button>
-            <span v-else class="current-cover-badge">
-              <Star :size="12" fill="currentColor" />
-              <span>대표 사진</span>
-            </span>
 
-            <button class="icon-edit-btn" @click="openEditModal(photo)" title="사진 수정">
-              <Edit3 :size="13" />
-              <span>수정</span>
-            </button>
+            <div class="card-action-group">
+              <button
+                v-if="!photo.isCover"
+                class="cover-action-btn"
+                @click="handleSetCover(photo.id)"
+                title="대표 사진으로 지정"
+              >
+                <Star :size="12" />
+                <span>대표</span>
+              </button>
+              <span v-else class="current-cover-badge">
+                <Star :size="12" fill="currentColor" />
+                <span>대표</span>
+              </span>
+
+              <button class="icon-edit-btn" @click="openEditModal(photo)" title="사진 수정">
+                <Edit3 :size="12" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -404,6 +458,19 @@ const handleDragEnd = () => {
               <span>이 사진을 메인 대표 사진으로 지정</span>
             </label>
           </div>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input
+                v-model="editForm.isHidden"
+                type="checkbox"
+                class="checkbox-input"
+              />
+              <span :class="{ 'text-danger': editForm.isHidden }">
+                이 사진을 청첩장에서 숨기기 (비노출)
+              </span>
+            </label>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -436,6 +503,48 @@ const handleDragEnd = () => {
   font-size: 20px;
   color: var(--text-main);
   margin-bottom: 4px;
+}
+
+.title-with-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.stats-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.stat-badge.visible {
+  background: #EBF7EE;
+  color: #1E7E34;
+  border: 1px solid #C3E6CB;
+}
+
+.stat-badge.hidden {
+  background: #FEECEB;
+  color: #C0392B;
+  border: 1px solid #F5C6CB;
+}
+
+.stat-badge.total {
+  background: var(--bg-warm);
+  color: var(--text-sub);
+  border: 1px solid var(--border-color);
 }
 
 .manager-desc {
@@ -557,6 +666,13 @@ const handleDragEnd = () => {
   border: 2px solid var(--gold-primary);
 }
 
+.photo-card.is-hidden {
+  opacity: 0.65;
+  filter: grayscale(20%);
+  border-color: #E2E8F0;
+  background: #F8FAFC;
+}
+
 .photo-card.is-dragging {
   opacity: 0.4;
   transform: scale(0.96);
@@ -620,6 +736,28 @@ const handleDragEnd = () => {
   gap: 3px;
   z-index: 2;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.hidden-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(192, 57, 43, 0.88);
+  backdrop-filter: blur(4px);
+  color: #FFFFFF;
+  padding: 3px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.cover-badge + .hidden-badge {
+  right: 58px;
 }
 
 .thumb-overlay {
@@ -702,6 +840,38 @@ const handleDragEnd = () => {
   justify-content: space-between;
   border-top: 1px solid var(--border-light);
   padding-top: 8px;
+  gap: 6px;
+}
+
+.visibility-pill-btn {
+  background: #EBF7EE;
+  color: #1E7E34;
+  border: 1px solid #C3E6CB;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 7px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.visibility-pill-btn:hover {
+  filter: brightness(0.95);
+}
+
+.visibility-pill-btn.is-hidden-state {
+  background: #FEECEB;
+  color: #C0392B;
+  border-color: #F5C6CB;
+}
+
+.card-action-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .cover-action-btn {
@@ -712,8 +882,8 @@ const handleDragEnd = () => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 6px;
+  gap: 2px;
+  padding: 3px 5px;
   border-radius: 4px;
   transition: all 0.15s;
 }
@@ -729,7 +899,8 @@ const handleDragEnd = () => {
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  padding: 3px 5px;
 }
 
 .icon-edit-btn {
@@ -737,11 +908,11 @@ const handleDragEnd = () => {
   border: 1px solid var(--border-color);
   font-size: 11px;
   color: var(--text-main);
-  padding: 3px 8px;
+  padding: 3px 6px;
   border-radius: 5px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -750,6 +921,10 @@ const handleDragEnd = () => {
   background: var(--gold-soft);
   border-color: var(--gold-primary);
   color: var(--gold-dark);
+}
+
+.text-danger {
+  color: #C0392B;
 }
 
 .empty-state {

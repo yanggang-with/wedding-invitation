@@ -95,6 +95,7 @@ export const DEFAULT_WEDDING_INFO: WeddingInfo = {
     isMotherDeceased: false
   },
   date: '2026-12-12T18:00:00',
+  dateFormat: 'YYYY년 M월 D일 dddd A h시',
   venue: {
     name: '서울상록회관',
     hall: '상록아트홀',

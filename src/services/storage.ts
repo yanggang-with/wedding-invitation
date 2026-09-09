@@ -173,6 +173,13 @@ export function updatePhotoItem(id: string, updates: Partial<Omit<PhotoItem, 'id
   }
 }
 
+export function togglePhotoVisibility(id: string) {
+  const photo = photos.value.find(p => p.id === id)
+  if (photo) {
+    photo.isHidden = !photo.isHidden
+  }
+}
+
 export function reorderPhotos(fromIndex: number, toIndex: number) {
   if (fromIndex < 0 || fromIndex >= photos.value.length || toIndex < 0 || toIndex >= photos.value.length) return
   const item = photos.value.splice(fromIndex, 1)[0]
@@ -240,4 +247,63 @@ export function resetToSampleData() {
   guestbook.value = JSON.parse(JSON.stringify(DEFAULT_GUESTBOOK))
   rsvpList.value = []
 }
+
+// Date formatting helper
+export function formatWeddingDate(dateStr: string, formatPattern?: string, customPattern?: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return ''
+
+  let pattern = formatPattern || 'YYYY년 M월 D일 dddd A h시'
+  if (pattern === 'CUSTOM') {
+    pattern = customPattern?.trim() || 'YYYY년 M월 D일 dddd A h시'
+  }
+
+  const year = d.getFullYear()
+  const shortYear = String(year).slice(-2)
+  const month = d.getMonth() + 1
+  const padMonth = String(month).padStart(2, '0')
+  const date = d.getDate()
+  const padDate = String(date).padStart(2, '0')
+
+  const fullDays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
+  const shortDays = ['일', '월', '화', '수', '목', '금', '토']
+  const engShortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const dayIndex = d.getDay()
+  const dddd = fullDays[dayIndex]
+  const ddd = shortDays[dayIndex]
+  const engDdd = engShortDays[dayIndex]
+
+  const hours = d.getHours()
+  const padHours = String(hours).padStart(2, '0')
+  const h12 = hours % 12 === 0 ? 12 : hours % 12
+  const padH12 = String(h12).padStart(2, '0')
+
+  const minutes = d.getMinutes()
+  const padMinutes = String(minutes).padStart(2, '0')
+
+  const ampmKo = hours < 12 ? '오전' : '오후'
+  const ampmEn = hours < 12 ? 'AM' : 'PM'
+
+  // Replace tokens safely using regex
+  return pattern
+    .replace(/\bYYYY\b/g, String(year))
+    .replace(/\bYY\b/g, shortYear)
+    .replace(/\bMM\b/g, padMonth)
+    .replace(/\bM\b/g, String(month))
+    .replace(/\bDD\b/g, padDate)
+    .replace(/\bD\b/g, String(date))
+    .replace(/\bdddd\b/g, dddd)
+    .replace(/\bddd\b/g, ddd)
+    .replace(/\bEngDdd\b/g, engDdd)
+    .replace(/\bHH\b/g, padHours)
+    .replace(/\bH\b/g, String(hours))
+    .replace(/\bhh\b/g, padH12)
+    .replace(/\bh\b/g, String(h12))
+    .replace(/\bmm\b/g, padMinutes)
+    .replace(/\bm\b/g, String(minutes))
+    .replace(/\bA\b/g, ampmKo)
+    .replace(/\ba\b/g, ampmEn)
+}
+
 

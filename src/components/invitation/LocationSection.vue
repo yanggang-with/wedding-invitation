@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { weddingInfo } from '../../services/storage'
-import { MapPin, Copy, Navigation, Check, Car, Train, Bus } from 'lucide-vue-next'
+import { MapPin, Copy, Check, Car, Train, Bus } from 'lucide-vue-next'
 
 const copied = ref(false)
 
@@ -34,6 +34,10 @@ const tmapUrl = computed(() => {
   const name = encodeURIComponent(venue.value.name)
   return `tmap://route?goalname=${name}&goalx=${venue.value.mapLng}&goaly=${venue.value.mapLat}`
 })
+
+const windowOpen = (url: string) => {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
@@ -66,29 +70,61 @@ const tmapUrl = computed(() => {
 
     <!-- Map Preview Frame -->
     <div class="map-card card-paper">
-      <div class="map-visual">
-        <!-- Interactive Kakao Map link / Static preview -->
+      <!-- Naver Map Display -->
+      <div class="map-visual" @click="windowOpen(naverMapUrl)">
+        <!-- Static/Interactive Map Tile View centered at venue coordinates -->
         <iframe
           class="map-iframe"
-          title="예식장 지도"
-          :src="`https://maps.google.com/maps?q=${venue.mapLat},${venue.mapLng}&hl=ko&z=15&output=embed`"
+          title="네이버 지도 위치"
+          :src="`https://www.openstreetmap.org/export/embed.html?bbox=${venue.mapLng - 0.005}%2C${venue.mapLat - 0.003}%2C${venue.mapLng + 0.005}%2C${venue.mapLat + 0.003}&amp;layer=mapnik&amp;marker=${venue.mapLat}%2C${venue.mapLng}`"
           loading="lazy"
         ></iframe>
+
+        <!-- Naver Map Marker & Brand Overlay -->
+        <div class="naver-map-overlay">
+          <div class="naver-brand-badge font-sans">
+            <svg class="naver-badge-icon" viewBox="0 0 24 24" width="13" height="13" fill="none">
+              <rect width="24" height="24" rx="4" fill="#03C75A"/>
+              <path d="M7 6H10.16L13.84 11.75V6H17V18H13.84L10.16 12.25V18H7V6Z" fill="#FFFFFF"/>
+            </svg>
+            <span>NAVER 지도</span>
+          </div>
+
+          <div class="naver-pin-bubble font-sans">
+            <span class="pin-venue-name">{{ venue.name }}</span>
+            <span class="pin-click-hint">클릭시 네이버지도 앱으로 연결</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Navigation App 3 Buttons -->
+      <!-- Navigation App 3 Buttons with Official App Icons -->
       <div class="navi-buttons-grid font-sans">
+        <!-- KakaoMap Button -->
         <a :href="kakaoNaviUrl" target="_blank" rel="noopener noreferrer" class="navi-btn kakao">
-          <Navigation :size="14" />
+          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+            <rect width="24" height="24" rx="5" fill="#FEE500"/>
+            <path d="M12 5C7.86 5 4.5 7.69 4.5 11C4.5 13.08 5.86 14.92 7.95 15.93L7.25 18.78C7.17 19.11 7.54 19.35 7.81 19.17L11.72 16.59C11.81 16.6 11.91 16.6 12 16.6C16.14 16.6 19.5 13.91 19.5 11C19.5 7.69 16.14 5 12 5Z" fill="#191919"/>
+          </svg>
           <span>카카오맵</span>
         </a>
+
+        <!-- Naver Map Button -->
         <a :href="naverMapUrl" target="_blank" rel="noopener noreferrer" class="navi-btn naver">
-          <Navigation :size="14" />
+          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+            <rect width="24" height="24" rx="5" fill="#03C75A"/>
+            <path d="M7 6H10.16L13.84 11.75V6H17V18H13.84L10.16 12.25V18H7V6Z" fill="#FFFFFF"/>
+          </svg>
           <span>네이버지도</span>
         </a>
+
+        <!-- TMAP Button -->
         <a :href="tmapUrl" class="navi-btn tmap">
-          <Navigation :size="14" />
-          <span>티맵(TMAP)</span>
+          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+            <rect width="24" height="24" rx="5" fill="#0051FF"/>
+            <path d="M6 7H18V10H13.5V17.5H10.5V10H6V7Z" fill="#FFFFFF"/>
+            <circle cx="17.5" cy="7.5" r="2" fill="#FF2E4C"/>
+          </svg>
+          <span>티맵</span>
         </a>
       </div>
     </div>
@@ -211,17 +247,77 @@ const tmapUrl = computed(() => {
 
 .map-visual {
   width: 100%;
-  height: 220px;
+  height: 230px;
   border-radius: 12px;
   overflow: hidden;
   position: relative;
   background: #EAE6DF;
+  cursor: pointer;
 }
 
 .map-iframe {
   width: 100%;
   height: 100%;
   border: none;
+  pointer-events: none; /* Let user click visual to open Naver Map directly */
+}
+
+.naver-map-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.naver-brand-badge {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #03C75A;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.naver-badge-icon {
+  flex-shrink: 0;
+}
+
+.naver-pin-bubble {
+  align-self: center;
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(4px);
+  color: #FFFFFF;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+
+.map-visual:hover .naver-pin-bubble {
+  transform: scale(1.04);
+}
+
+.pin-venue-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pin-click-hint {
+  font-size: 10px;
+  color: #86EFAC;
 }
 
 .navi-buttons-grid {
@@ -239,13 +335,17 @@ const tmapUrl = computed(() => {
   padding: 10px 4px;
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
-  transition: transform 0.2s;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .navi-btn:active {
   transform: scale(0.96);
+}
+
+.app-svg-icon {
+  flex-shrink: 0;
 }
 
 .navi-btn.kakao {

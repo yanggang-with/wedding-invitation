@@ -32,6 +32,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  scroll-snap-type: y proximity;
+  scroll-behavior: smooth;
+}
+
 html, body {
   background-color: #EDE8DE;
   color: var(--text-main);

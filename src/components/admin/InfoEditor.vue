@@ -1,9 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { weddingInfo } from '../../services/storage'
-import { Save, Check } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { weddingInfo, formatWeddingDate } from '../../services/storage'
+import { Save, Check, Calendar, Eye } from 'lucide-vue-next'
 
 const savedNotice = ref(false)
+
+const DATE_FORMAT_PRESETS = [
+  { label: '2026년 12월 12일 토요일 오후 6시', value: 'YYYY년 M월 D일 dddd A h시' },
+  { label: '2026년 12월 12일 토요일 오후 6시 00분', value: 'YYYY년 M월 D일 dddd A h시 mm분' },
+  { label: '2026년 12월 12일 (토) 오후 6시', value: 'YYYY년 M월 D일 (ddd) A h시' },
+  { label: '2026. 12. 12. (토) 18:00', value: 'YYYY. MM. DD. (ddd) HH:mm' },
+  { label: '2026 / 12 / 12 (토) PM 06:00', value: 'YYYY / MM / DD (ddd) a hh:mm' },
+  { label: '직접 형식 지정 (사용자 정의)', value: 'CUSTOM' }
+]
+
+// Ensure default dateFormat is set
+if (!weddingInfo.value.dateFormat) {
+  weddingInfo.value.dateFormat = 'YYYY년 M월 D일 dddd A h시'
+}
+
+const formattedDatePreview = computed(() => {
+  return formatWeddingDate(
+    weddingInfo.value.date,
+    weddingInfo.value.dateFormat,
+    weddingInfo.value.customDateFormat
+  )
+})
 
 const handleSave = () => {
   savedNotice.value = true
@@ -34,13 +56,55 @@ const handleSave = () => {
         <h4 class="block-title font-serif">1. 예식 일시 및 장소</h4>
         
         <div class="form-grid">
-          <div class="form-group full">
-            <label class="form-label">예식 일시</label>
+          <div class="form-group">
+            <label class="form-label">
+              <Calendar :size="13" class="inline-icon" />
+              <span>예식 일시</span>
+            </label>
             <input
               v-model="weddingInfo.date"
               type="datetime-local"
               class="input-field"
             />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">날짜 표기 형식 선택</label>
+            <select
+              v-model="weddingInfo.dateFormat"
+              class="input-field select-field"
+            >
+              <option
+                v-for="preset in DATE_FORMAT_PRESETS"
+                :key="preset.value"
+                :value="preset.value"
+              >
+                {{ preset.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Custom Format Input if CUSTOM selected -->
+          <div v-if="weddingInfo.dateFormat === 'CUSTOM'" class="form-group full custom-format-box">
+            <label class="form-label">사용자 정의 날짜 포맷</label>
+            <input
+              v-model="weddingInfo.customDateFormat"
+              type="text"
+              placeholder="예: YYYY년 M월 D일 dddd A h시 (사용 가능 토큰: YYYY, MM, M, DD, D, dddd, ddd, A, a, HH, H, hh, h, mm)"
+              class="input-field"
+            />
+            <p class="format-help">
+              * 사용 가능 토큰: <code>YYYY</code>(년), <code>MM</code>/<code>M</code>(월), <code>DD</code>/<code>D</code>(일), <code>dddd</code>/<code>ddd</code>(요일), <code>A</code>/<code>a</code>(오전/오후), <code>hh</code>/<code>h</code>(12시간제), <code>HH</code>/<code>H</code>(24시간제), <code>mm</code>(분)
+            </p>
+          </div>
+
+          <!-- Date Preview Box -->
+          <div class="form-group full date-preview-box">
+            <div class="preview-inner">
+              <Eye :size="14" class="preview-icon" />
+              <span class="preview-label">청첩장 노출 날짜 미리보기:</span>
+              <strong class="preview-text">{{ formattedDatePreview }}</strong>
+            </div>
           </div>
 
           <div class="form-group">
@@ -408,5 +472,69 @@ const handleSave = () => {
   font-size: 13px;
   color: var(--text-sub);
   cursor: pointer;
+}
+
+.inline-icon {
+  display: inline;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.select-field {
+  cursor: pointer;
+  background-color: #FFFFFF;
+}
+
+.custom-format-box {
+  background: var(--bg-warm);
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-color);
+}
+
+.format-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.format-help code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+  color: var(--gold-dark);
+}
+
+.date-preview-box {
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.preview-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gold-dark);
+}
+
+.preview-icon {
+  flex-shrink: 0;
+  color: var(--gold-primary);
+}
+
+.preview-label {
+  font-weight: 500;
+  color: var(--text-sub);
+  font-size: 12px;
+}
+
+.preview-text {
+  color: var(--gold-dark);
+  font-weight: 600;
 }
 </style>
