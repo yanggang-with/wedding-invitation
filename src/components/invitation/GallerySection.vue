@@ -5,7 +5,7 @@ import { X, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-vue-next'
 
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
-const INITIAL_COUNT = 6
+const INITIAL_COUNT = 9
 
 const sortedPhotos = computed(() => {
   return photos.value
@@ -18,8 +18,12 @@ const displayedPhotos = computed(() => {
   return sortedPhotos.value.slice(0, INITIAL_COUNT)
 })
 
+const remainingPhotosCount = computed(() => {
+  return Math.max(0, sortedPhotos.value.length - INITIAL_COUNT)
+})
+
 const hasMorePhotos = computed(() => {
-  return sortedPhotos.value.length > INITIAL_COUNT
+  return remainingPhotosCount.value > 0
 })
 
 const openLightbox = (index: number) => {
@@ -97,7 +101,7 @@ const handleSwipe = () => {
     <!-- Load More Button -->
     <div v-if="hasMorePhotos" class="gallery-more">
       <button class="btn-secondary font-sans more-btn" @click="isExpanded = !isExpanded">
-        <span>{{ isExpanded ? '사진 접기' : `사진 더보기 (${sortedPhotos.length}장)` }}</span>
+        <span>{{ isExpanded ? '사진 접기' : `사진 더보기 (${remainingPhotosCount}장)` }}</span>
         <ChevronDown :size="16" :class="{ 'rotate-180': isExpanded }" />
       </button>
     </div>

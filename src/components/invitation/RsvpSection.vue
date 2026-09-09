@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { addRsvpResponse } from '../../services/storage'
+import { addRsvpResponse, weddingInfo } from '../../services/storage'
 import confetti from 'canvas-confetti'
 import { CheckCircle2, HeartHandshake } from 'lucide-vue-next'
 
@@ -106,7 +106,7 @@ const resetForm = () => {
               :class="{ 'active groom': form.side === 'groom' }"
               @click="form.side = 'groom'"
             >
-              신랑측 하객
+              신랑({{ weddingInfo.groom.name }})측 하객
             </button>
             <button
               type="button"
@@ -114,7 +114,7 @@ const resetForm = () => {
               :class="{ 'active bride': form.side === 'bride' }"
               @click="form.side = 'bride'"
             >
-              신부측 하객
+              신부({{ weddingInfo.bride.name }})측 하객
             </button>
           </div>
         </div>
@@ -200,12 +200,12 @@ const resetForm = () => {
 
         <!-- Phone Input -->
         <div class="form-group">
-          <label class="form-label" for="guestPhone">연락처</label>
+          <label class="form-label" for="guestPhone">연락처 (선택)</label>
           <input
             id="guestPhone"
             v-model="form.phone"
             type="tel"
-            placeholder="010-0000-0000"
+            placeholder="010-0000-0000 (선택 사항)"
             class="input-field"
           />
         </div>

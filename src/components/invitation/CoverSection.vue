@@ -16,16 +16,6 @@ const formattedDate = computed(() => {
     weddingInfo.value.customDateFormat
   )
 })
-
-const englishDate = computed(() => {
-  const d = new Date(weddingInfo.value.date)
-  if (isNaN(d.getTime())) return ''
-  const year = d.getFullYear()
-  const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-  const month = monthNames[d.getMonth()]
-  const date = String(d.getDate()).padStart(2, '0')
-  return `${month} ${date}, ${year}`
-})
 </script>
 
 <template>
@@ -33,7 +23,6 @@ const englishDate = computed(() => {
     <!-- Top Tagline -->
     <div class="header-tagline">
       <span class="sub-label">WEDDING INVITATION</span>
-      <p class="eng-date font-serif">{{ englishDate }}</p>
     </div>
 
     <!-- Main Photo Frame with elegant shadow & border -->

@@ -52,36 +52,40 @@ const copyAccount = async (item: AccountItem) => {
           <ChevronDown :size="18" class="chevron-icon" :class="{ 'is-open': isGroomOpen }" />
         </button>
 
-        <div v-show="isGroomOpen" class="accordion-body">
-          <div v-for="item in groomAccounts" :key="item.id" class="account-card">
-            <div class="account-details">
-              <div class="account-title-row">
-                <span class="acc-title">{{ item.title }}</span>
-                <span class="acc-holder">({{ item.accountHolder }})</span>
-              </div>
-              <div class="acc-number-row">
-                <span class="bank">{{ item.bankName }}</span>
-                <span class="number">{{ item.accountNumber }}</span>
-              </div>
-            </div>
+        <div class="accordion-collapse" :class="{ 'is-open': isGroomOpen }">
+          <div class="accordion-collapse-inner">
+            <div class="accordion-body">
+              <div v-for="item in groomAccounts" :key="item.id" class="account-card">
+                <div class="account-details">
+                  <div class="account-title-row">
+                    <span class="acc-title">{{ item.title }}</span>
+                    <span class="acc-holder">({{ item.accountHolder }})</span>
+                  </div>
+                  <div class="acc-number-row">
+                    <span class="bank">{{ item.bankName }}</span>
+                    <span class="number">{{ item.accountNumber }}</span>
+                  </div>
+                </div>
 
-            <div class="account-actions">
-              <button class="action-btn copy" @click="copyAccount(item)">
-                <Check v-if="copiedId === item.id" :size="13" class="text-green" />
-                <Copy v-else :size="13" />
-                <span>{{ copiedId === item.id ? '복사됨' : '복사' }}</span>
-              </button>
+                <div class="account-actions">
+                  <button class="action-btn copy" @click="copyAccount(item)">
+                    <Check v-if="copiedId === item.id" :size="13" class="text-green" />
+                    <Copy v-else :size="13" />
+                    <span>{{ copiedId === item.id ? '복사됨' : '복사' }}</span>
+                  </button>
 
-              <a
-                v-if="item.kakaoPayUrl"
-                :href="item.kakaoPayUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="action-btn kakaopay"
-              >
-                <span>페이송금</span>
-                <ExternalLink :size="11" />
-              </a>
+                  <a
+                    v-if="item.kakaoPayUrl"
+                    :href="item.kakaoPayUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="action-btn kakaopay"
+                  >
+                    <span>페이송금</span>
+                    <ExternalLink :size="11" />
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -97,36 +101,40 @@ const copyAccount = async (item: AccountItem) => {
           <ChevronDown :size="18" class="chevron-icon" :class="{ 'is-open': isBrideOpen }" />
         </button>
 
-        <div v-show="isBrideOpen" class="accordion-body">
-          <div v-for="item in brideAccounts" :key="item.id" class="account-card">
-            <div class="account-details">
-              <div class="account-title-row">
-                <span class="acc-title">{{ item.title }}</span>
-                <span class="acc-holder">({{ item.accountHolder }})</span>
-              </div>
-              <div class="acc-number-row">
-                <span class="bank">{{ item.bankName }}</span>
-                <span class="number">{{ item.accountNumber }}</span>
-              </div>
-            </div>
+        <div class="accordion-collapse" :class="{ 'is-open': isBrideOpen }">
+          <div class="accordion-collapse-inner">
+            <div class="accordion-body">
+              <div v-for="item in brideAccounts" :key="item.id" class="account-card">
+                <div class="account-details">
+                  <div class="account-title-row">
+                    <span class="acc-title">{{ item.title }}</span>
+                    <span class="acc-holder">({{ item.accountHolder }})</span>
+                  </div>
+                  <div class="acc-number-row">
+                    <span class="bank">{{ item.bankName }}</span>
+                    <span class="number">{{ item.accountNumber }}</span>
+                  </div>
+                </div>
 
-            <div class="account-actions">
-              <button class="action-btn copy" @click="copyAccount(item)">
-                <Check v-if="copiedId === item.id" :size="13" class="text-green" />
-                <Copy v-else :size="13" />
-                <span>{{ copiedId === item.id ? '복사됨' : '복사' }}</span>
-              </button>
+                <div class="account-actions">
+                  <button class="action-btn copy" @click="copyAccount(item)">
+                    <Check v-if="copiedId === item.id" :size="13" class="text-green" />
+                    <Copy v-else :size="13" />
+                    <span>{{ copiedId === item.id ? '복사됨' : '복사' }}</span>
+                  </button>
 
-              <a
-                v-if="item.kakaoPayUrl"
-                :href="item.kakaoPayUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="action-btn kakaopay"
-              >
-                <span>페이송금</span>
-                <ExternalLink :size="11" />
-              </a>
+                  <a
+                    v-if="item.kakaoPayUrl"
+                    :href="item.kakaoPayUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="action-btn kakaopay"
+                  >
+                    <span>페이송금</span>
+                    <ExternalLink :size="11" />
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -201,6 +209,21 @@ const copyAccount = async (item: AccountItem) => {
 
 .chevron-icon.is-open {
   transform: rotate(180deg);
+}
+
+.accordion-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.accordion-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .accordion-body {

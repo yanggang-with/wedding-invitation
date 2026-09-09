@@ -24,3 +24,4 @@ try {
 } catch (err) {
   console.error('Failed to fix git index:', err.message)
 }
+

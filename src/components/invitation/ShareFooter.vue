@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { weddingInfo, photos } from '../../services/storage'
-import { Share2, Link as LinkIcon, Check, Settings } from 'lucide-vue-next'
+import { Share2, Link as LinkIcon, Check } from 'lucide-vue-next'
 
-const router = useRouter()
 const linkCopied = ref(false)
 
 const copyCurrentUrl = async () => {
@@ -60,10 +58,6 @@ const shareKakao = () => {
     alert('청첩장 링크가 복사되었습니다. 카카오톡이나 메시지로 공유해 보세요!')
   }
 }
-
-const goToAdmin = () => {
-  router.push('/admin')
-}
 </script>
 
 <template>
@@ -82,20 +76,12 @@ const goToAdmin = () => {
       </button>
     </div>
 
-    <!-- Blessing and Admin link -->
+    <!-- Blessing & Copyright -->
     <div class="footer-meta">
       <p class="blessing-text font-serif">
         {{ weddingInfo.groom.name }} &amp; {{ weddingInfo.bride.name }}
       </p>
       <p class="copyright">Thank you for celebrating with us</p>
-
-      <!-- Admin Entry Link -->
-      <div class="admin-entry">
-        <button class="admin-link-btn" @click="goToAdmin">
-          <Settings :size="12" />
-          <span>관리자 페이지</span>
-        </button>
-      </div>
     </div>
   </footer>
 </template>
@@ -170,28 +156,6 @@ const goToAdmin = () => {
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 1px;
-}
-
-.admin-entry {
-  margin-top: 20px;
-}
-
-.admin-link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  font-size: 11px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: color 0.2s;
-}
-
-.admin-link-btn:hover {
-  color: var(--gold-primary);
 }
 </style>
 

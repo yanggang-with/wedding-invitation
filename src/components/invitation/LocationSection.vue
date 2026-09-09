@@ -70,59 +70,67 @@ const windowOpen = (url: string) => {
 
     <!-- Map Preview Frame -->
     <div class="map-card card-paper">
-      <!-- Naver Map Display -->
-      <div class="map-visual" @click="windowOpen(naverMapUrl)">
-        <!-- Static/Interactive Map Tile View centered at venue coordinates -->
+      <!-- Interactive Naver Map Container -->
+      <div class="map-visual interactive-map">
+        <!-- Interactive Map Tile (Interactive Pan & Zoom Enabled) -->
         <iframe
           class="map-iframe"
-          title="네이버 지도 위치"
-          :src="`https://www.openstreetmap.org/export/embed.html?bbox=${venue.mapLng - 0.005}%2C${venue.mapLat - 0.003}%2C${venue.mapLng + 0.005}%2C${venue.mapLat + 0.003}&amp;layer=mapnik&amp;marker=${venue.mapLat}%2C${venue.mapLng}`"
+          title="네이버 지도 예식장 위치"
+          :src="`https://www.openstreetmap.org/export/embed.html?bbox=${venue.mapLng - 0.006}%2C${venue.mapLat - 0.004}%2C${venue.mapLng + 0.006}%2C${venue.mapLat + 0.004}&amp;layer=mapnik&amp;marker=${venue.mapLat}%2C${venue.mapLng}`"
           loading="lazy"
         ></iframe>
 
-        <!-- Naver Map Marker & Brand Overlay -->
-        <div class="naver-map-overlay">
-          <div class="naver-brand-badge font-sans">
-            <svg class="naver-badge-icon" viewBox="0 0 24 24" width="13" height="13" fill="none">
-              <rect width="24" height="24" rx="4" fill="#03C75A"/>
-              <path d="M7 6H10.16L13.84 11.75V6H17V18H13.84L10.16 12.25V18H7V6Z" fill="#FFFFFF"/>
-            </svg>
-            <span>NAVER 지도</span>
-          </div>
+        <!-- Naver Map Brand Tag -->
+        <div class="naver-brand-badge font-sans" @click.stop="windowOpen(naverMapUrl)" title="네이버 지도로 열기">
+          <svg class="naver-badge-icon" viewBox="0 0 32 32" width="16" height="16" fill="none">
+            <rect width="32" height="32" rx="7" fill="#03C75A"/>
+            <path d="M16 5C11.58 5 8 8.58 8 13C8 18.25 14.8 25.5 15.35 26.08C15.7 26.45 16.3 26.45 16.65 26.08C17.2 25.5 24 18.25 24 13C24 8.58 20.42 5 16 5Z" fill="#FFFFFF"/>
+            <path d="M13 10H14.5L17.5 14.3V10H19V16H17.5L14.5 11.7V16H13V10Z" fill="#03C75A"/>
+          </svg>
+          <span>NAVER 지도</span>
+        </div>
 
-          <div class="naver-pin-bubble font-sans">
-            <span class="pin-venue-name">{{ venue.name }}</span>
-            <span class="pin-click-hint">클릭시 네이버지도 앱으로 연결</span>
-          </div>
+        <!-- Venue Name Pill & Action Link -->
+        <div class="map-venue-tag font-sans" @click.stop="windowOpen(naverMapUrl)">
+          <span class="venue-tag-title">{{ venue.name }}</span>
+          <span class="venue-tag-btn">길찾기 ➔</span>
         </div>
       </div>
 
-      <!-- Navigation App 3 Buttons with Official App Icons -->
+      <!-- Navigation App 3 Buttons with Latest Official Icons -->
       <div class="navi-buttons-grid font-sans">
         <!-- KakaoMap Button -->
         <a :href="kakaoNaviUrl" target="_blank" rel="noopener noreferrer" class="navi-btn kakao">
-          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
-            <rect width="24" height="24" rx="5" fill="#FEE500"/>
-            <path d="M12 5C7.86 5 4.5 7.69 4.5 11C4.5 13.08 5.86 14.92 7.95 15.93L7.25 18.78C7.17 19.11 7.54 19.35 7.81 19.17L11.72 16.59C11.81 16.6 11.91 16.6 12 16.6C16.14 16.6 19.5 13.91 19.5 11C19.5 7.69 16.14 5 12 5Z" fill="#191919"/>
+          <svg class="app-svg-icon" viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="7" fill="#FEE500"/>
+            <path d="M16 7C10.48 7 6 10.58 6 15C6 17.78 7.82 20.23 10.6 21.57L9.67 25.37C9.56 25.82 10.05 26.13 10.41 25.89L15.63 22.45C15.75 22.46 15.88 22.47 16 22.47C21.52 22.47 26 18.89 26 14.47C26 10.05 21.52 7 16 7Z" fill="#191919"/>
           </svg>
           <span>카카오맵</span>
         </a>
 
-        <!-- Naver Map Button -->
+        <!-- Naver Map Button (Latest Official Pin+N App Icon) -->
         <a :href="naverMapUrl" target="_blank" rel="noopener noreferrer" class="navi-btn naver">
-          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
-            <rect width="24" height="24" rx="5" fill="#03C75A"/>
-            <path d="M7 6H10.16L13.84 11.75V6H17V18H13.84L10.16 12.25V18H7V6Z" fill="#FFFFFF"/>
+          <svg class="app-svg-icon" viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="7" fill="#03C75A"/>
+            <path d="M16 5C11.58 5 8 8.58 8 13C8 18.25 14.8 25.5 15.35 26.08C15.7 26.45 16.3 26.45 16.65 26.08C17.2 25.5 24 18.25 24 13C24 8.58 20.42 5 16 5Z" fill="#FFFFFF"/>
+            <path d="M13 10H14.5L17.5 14.3V10H19V16H17.5L14.5 11.7V16H13V10Z" fill="#03C75A"/>
           </svg>
           <span>네이버지도</span>
         </a>
 
-        <!-- TMAP Button -->
+        <!-- TMAP Button (Latest Official Dark Navy + 3D Gradient Mobility Loop Icon) -->
         <a :href="tmapUrl" class="navi-btn tmap">
-          <svg class="app-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
-            <rect width="24" height="24" rx="5" fill="#0051FF"/>
-            <path d="M6 7H18V10H13.5V17.5H10.5V10H6V7Z" fill="#FFFFFF"/>
-            <circle cx="17.5" cy="7.5" r="2" fill="#FF2E4C"/>
+          <svg class="app-svg-icon" viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <defs>
+              <linearGradient id="tmapGradient" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#00D2FF"/>
+                <stop offset="45%" stop-color="#0066FF"/>
+                <stop offset="100%" stop-color="#FF2A6D"/>
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="7" fill="#0F172A"/>
+            <path d="M8 10C8 8.9 8.9 8 10 8H22C23.1 8 24 8.9 24 10C24 11.1 23.1 12 22 12H18V22C18 23.1 17.1 24 16 24C14.9 24 14 23.1 14 22V12H10C8.9 12 8 11.1 8 10Z" fill="url(#tmapGradient)"/>
+            <circle cx="21.5" cy="9.5" r="2" fill="#FF2A6D"/>
           </svg>
           <span>티맵</span>
         </a>
@@ -247,67 +255,85 @@ const windowOpen = (url: string) => {
 
 .map-visual {
   width: 100%;
-  height: 230px;
+  height: 250px;
   border-radius: 12px;
   overflow: hidden;
   position: relative;
   background: #EAE6DF;
-  cursor: pointer;
 }
 
 .map-iframe {
   width: 100%;
   height: 100%;
   border: none;
-  pointer-events: none; /* Let user click visual to open Naver Map directly */
-}
-
-.naver-map-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 12px;
+  pointer-events: auto; /* Enable user pan and zoom interactions */
 }
 
 .naver-brand-badge {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.94);
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(4px);
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 5px 9px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 11px;
   font-weight: 700;
   color: #03C75A;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+  z-index: 5;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.naver-brand-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(3, 199, 90, 0.25);
 }
 
 .naver-badge-icon {
   flex-shrink: 0;
 }
 
-.naver-pin-bubble {
-  align-self: center;
-  background: rgba(17, 24, 39, 0.88);
-  backdrop-filter: blur(4px);
+.map-venue-tag {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(6px);
   color: #FFFFFF;
-  padding: 7px 14px;
+  padding: 6px 12px;
   border-radius: 9999px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 5;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s;
+  transition: all 0.15s;
 }
 
-.map-visual:hover .naver-pin-bubble {
-  transform: scale(1.04);
+.map-venue-tag:hover {
+  background: #03C75A;
+  transform: translateY(-1px);
+}
+
+.venue-tag-title {
+  color: #FFFFFF;
+}
+
+.venue-tag-btn {
+  font-size: 11px;
+  color: #86EFAC;
+}
+
+.map-venue-tag:hover .venue-tag-btn {
+  color: #FFFFFF;
 }
 
 .pin-venue-name {
