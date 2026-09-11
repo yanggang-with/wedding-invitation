@@ -11,28 +11,18 @@ import RsvpSection from '../components/invitation/RsvpSection.vue'
 import GuestbookSection from '../components/invitation/GuestbookSection.vue'
 import ShareFooter from '../components/invitation/ShareFooter.vue'
 
+// Desktop Mouse Wheel state
 let isWheelLocked = false
-let lockTimer: any = null
+let wheelLockTimer: any = null
 
-const handleWheel = (e: WheelEvent) => {
-  // 모달(라이트박스 등)이 열려있거나 스크롤이 잠긴 경우 무시
-  if (document.body.style.overflow === 'hidden') return
+// Mobile Touch Swipe state
+let touchStartY = 0
+let touchStartX = 0
+let isTouchLocked = false
+let touchLockTimer: any = null
 
-  // 미세 떨림 무시
-  if (Math.abs(e.deltaY) < 25) return
-
-  // 휠 디바운싱 잠금
-  if (isWheelLocked) {
-    e.preventDefault()
-    return
-  }
-
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
-  if (!sections.length) return
-
-  const windowHeight = window.innerHeight
-
-  // 현재 가장 많이 화면에 보이는 섹션 인덱스 계산
+// Calculate the index of the currently most visible section
+const getCurrentSectionIndex = (sections: HTMLElement[], windowHeight: number): number => {
   let currentIndex = 0
   let maxVisibleHeight = -1
 
@@ -47,9 +37,40 @@ const handleWheel = (e: WheelEvent) => {
     }
   })
 
+  return currentIndex
+}
+
+// Scroll to target section ensuring it is centered vertically on PC
+const scrollToSection = (targetEl: HTMLElement) => {
+  const windowHeight = window.innerHeight
+  const targetHeight = targetEl.getBoundingClientRect().height
+  // On desktop/PC, if the section fits within the viewport, center it; otherwise align to start
+  const blockAlign = targetHeight <= windowHeight ? 'center' : 'start'
+  targetEl.scrollIntoView({ behavior: 'smooth', block: blockAlign })
+}
+
+// 1. Desktop Mouse Wheel Handler
+const handleWheel = (e: WheelEvent) => {
+  // 모달(라이트박스 등)이 열려있거나 스크롤이 잠긴 경우 무시
+  if (document.body.style.overflow === 'hidden') return
+
+  // 미세 떨림 무시
+  if (Math.abs(e.deltaY) < 25) return
+
+  // 휠 잠금 디바운싱
+  if (isWheelLocked) {
+    e.preventDefault()
+    return
+  }
+
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
+  if (!sections.length) return
+
+  const windowHeight = window.innerHeight
+  const currentIndex = getCurrentSectionIndex(sections, windowHeight)
   const currentRect = sections[currentIndex].getBoundingClientRect()
 
-  // 긴 섹션(갤러리 등)에서 내부 내용이 아직 남아있으면 기본 스크롤 허용
+  // 긴 섹션(갤러리 등)에서 내부 내용이 아직 남아있으면 일반 스크롤 허용
   if (e.deltaY > 0 && currentRect.bottom > windowHeight + 40) {
     return
   }
@@ -68,21 +89,83 @@ const handleWheel = (e: WheelEvent) => {
   if (targetIndex !== currentIndex) {
     e.preventDefault()
     isWheelLocked = true
-    sections[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'start' })
-    clearTimeout(lockTimer)
-    lockTimer = setTimeout(() => {
+    scrollToSection(sections[targetIndex])
+    clearTimeout(wheelLockTimer)
+    wheelLockTimer = setTimeout(() => {
       isWheelLocked = false
     }, 650)
   }
 }
 
+// 2. Mobile Touch Swipe Handlers (Swipe to navigate 1 section at a time)
+const handleTouchStart = (e: TouchEvent) => {
+  if (e.touches.length !== 1) return
+  touchStartY = e.touches[0].clientY
+  touchStartX = e.touches[0].clientX
+}
+
+const handleTouchEnd = (e: TouchEvent) => {
+  if (isTouchLocked || document.body.style.overflow === 'hidden') return
+  if (!touchStartY) return
+
+  const touchEndY = e.changedTouches[0].clientY
+  const touchEndX = e.changedTouches[0].clientX
+
+  const deltaY = touchStartY - touchEndY
+  const deltaX = touchStartX - touchEndX
+
+  // 수평 스와이프(갤러리 사진 슬라이드 등)가 더 크면 무시
+  if (Math.abs(deltaX) > Math.abs(deltaY)) return
+
+  // 스와이프 감도 임계값 (40px 이상 이동 시 스와이프로 인식)
+  if (Math.abs(deltaY) < 40) return
+
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
+  if (!sections.length) return
+
+  const windowHeight = window.innerHeight
+  const currentIndex = getCurrentSectionIndex(sections, windowHeight)
+  const currentRect = sections[currentIndex].getBoundingClientRect()
+
+  // 긴 섹션에서 내용이 남아있는 경우 일반 스크롤 허용
+  if (deltaY > 0 && currentRect.bottom > windowHeight + 40) {
+    return
+  }
+  if (deltaY < 0 && currentRect.top < -40) {
+    return
+  }
+
+  let targetIndex = currentIndex
+  if (deltaY > 0 && currentIndex < sections.length - 1) {
+    // 손가락을 위로 쓸어올림 -> 다음 섹션
+    targetIndex = currentIndex + 1
+  } else if (deltaY < 0 && currentIndex > 0) {
+    // 손가락을 아래로 쓸어내림 -> 이전 섹션
+    targetIndex = currentIndex - 1
+  }
+
+  if (targetIndex !== currentIndex) {
+    isTouchLocked = true
+    scrollToSection(sections[targetIndex])
+    clearTimeout(touchLockTimer)
+    touchLockTimer = setTimeout(() => {
+      isTouchLocked = false
+    }, 550)
+  }
+}
+
 onMounted(() => {
   window.addEventListener('wheel', handleWheel, { passive: false })
+  window.addEventListener('touchstart', handleTouchStart, { passive: true })
+  window.addEventListener('touchend', handleTouchEnd, { passive: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('wheel', handleWheel)
-  if (lockTimer) clearTimeout(lockTimer)
+  window.removeEventListener('touchstart', handleTouchStart)
+  window.removeEventListener('touchend', handleTouchEnd)
+  if (wheelLockTimer) clearTimeout(wheelLockTimer)
+  if (touchLockTimer) clearTimeout(touchLockTimer)
 })
 </script>
 
@@ -144,19 +227,28 @@ onUnmounted(() => {
 }
 
 .snap-section {
-  scroll-snap-align: start;
+  scroll-snap-align: center;
   scroll-snap-stop: normal;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center; /* PC에서 화면 세로 중앙 배치 */
+  align-items: center;
   box-sizing: border-box;
 }
 
-/* On mobile, allow sections to be naturally height-flexible while maintaining snap */
+/* Ensure inner section content centers vertically on taller PC screens */
+.snap-section > :deep(*) {
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+/* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .snap-section {
     min-height: 100vh;
+    scroll-snap-align: start;
   }
 }
 </style>
