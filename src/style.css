@@ -33,8 +33,13 @@
 }
 
 html {
-  scroll-snap-type: y proximity;
   scroll-behavior: smooth;
+}
+
+html.snap-mode {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 html, body {
@@ -90,6 +95,12 @@ html, body {
   padding: 56px 24px;
   text-align: center;
   position: relative;
+}
+
+@media (max-width: 768px) {
+  .invitation-section {
+    padding: 40px 20px;
+  }
 }
 
 .section-divider {
