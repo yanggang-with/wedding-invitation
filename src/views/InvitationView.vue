@@ -157,19 +157,21 @@ onUnmounted(() => {
 
 <style scoped>
 .snap-container {
-  scroll-behavior: smooth;
+  width: 100%;
 }
 
 .snap-section {
   scroll-snap-align: center;
   scroll-snap-stop: always;
   min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: center; /* PC에서 화면 세로 중앙 배치 */
   align-items: center;
   box-sizing: border-box;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 /* Ensure inner section content centers vertically on taller PC screens */
@@ -183,8 +185,8 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .snap-section {
     min-height: 100vh;
-    min-height: 100dvh;
-    scroll-snap-align: start end;
+    min-height: 100svh;
+    scroll-snap-align: start; /* 단일 스냅 포인트로 역스크롤 시 버벅임 방지 */
     scroll-snap-stop: always;
     display: flex;
     flex-direction: column;
