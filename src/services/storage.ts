@@ -7,7 +7,13 @@ import {
   DEFAULT_GUESTBOOK,
   DEFAULT_ADMIN_SETTINGS
 } from '../constants/initialData'
-import { initFirebase, uploadToFirebaseStorage } from './firebase'
+import {
+  initFirebase,
+  uploadToFirebaseStorage,
+  isFirebaseStorageReady,
+  fetchPhotosFromFirebaseStorage,
+  deleteFromFirebaseStorage
+} from './firebase'
 
 const STORAGE_KEYS = {
   PHOTOS: 'wedding_photos_v2',
@@ -38,9 +44,24 @@ export const rsvpList = ref<RsvpItem[]>(loadFromStorage<RsvpItem[]>(STORAGE_KEYS
 export const guestbook = ref<GuestbookItem[]>(loadFromStorage<GuestbookItem[]>(STORAGE_KEYS.GUESTBOOK, DEFAULT_GUESTBOOK))
 export const adminSettings = ref<AdminSettings>(loadFromStorage<AdminSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_ADMIN_SETTINGS))
 
+// Ensure firebaseConfig structure exists
+if (!adminSettings.value.firebaseConfig) {
+  adminSettings.value.firebaseConfig = {
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+    appId: ''
+  }
+}
+
 // Initialize Firebase if configured
-if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig) {
+if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
   initFirebase(adminSettings.value.firebaseConfig)
+} else {
+  // Try environment variables fallback
+  initFirebase()
 }
 
 // Watchers to auto-persist to LocalStorage
@@ -70,64 +91,28 @@ watch(guestbook, (val) => {
 
 watch(adminSettings, (val) => {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(val))
-  if (val.useFirebase && val.firebaseConfig) {
+  if (val.useFirebase && val.firebaseConfig?.apiKey) {
     initFirebase(val.firebaseConfig)
   }
 }, { deep: true })
 
 // Helper functions for Photo operations
-export async function uploadImage(file: File): Promise<string> {
-  // If Firebase is enabled and configured, upload to Firebase Storage
-  if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
-    try {
-      return await uploadToFirebaseStorage(file)
-    } catch (err) {
-      console.warn('Firebase upload failed, falling back to local compressed image:', err)
+export async function uploadImage(file: File, onProgress?: (percent: number) => void): Promise<string> {
+  // Try initializing if not already ready
+  if (!isFirebaseStorageReady()) {
+    if (adminSettings.value.firebaseConfig?.apiKey) {
+      initFirebase(adminSettings.value.firebaseConfig)
+    } else {
+      initFirebase()
     }
   }
 
-  // Fallback: Compress and read as base64 data URL for local storage demo
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        const MAX_WIDTH = 1200
-        const MAX_HEIGHT = 1200
-        let width = img.width
-        let height = img.height
+  // Upload to Firebase Storage
+  if (isFirebaseStorageReady()) {
+    return await uploadToFirebaseStorage(file, onProgress)
+  }
 
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width
-            width = MAX_WIDTH
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height
-            height = MAX_HEIGHT
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          resolve(e.target?.result as string)
-          return
-        }
-        ctx.drawImage(img, 0, 0, width, height)
-        // Export as WebP or JPEG
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-        resolve(dataUrl)
-      }
-      img.onerror = reject
-      img.src = e.target?.result as string
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
+  throw new Error('Firebase Storage가 연동되지 않았습니다. 관리자 설정에서 Firebase 정보를 입력해주세요.')
 }
 
 export function addPhotoItem(photo: Omit<PhotoItem, 'id' | 'order' | 'createdAt'>) {
@@ -147,7 +132,12 @@ export function addPhotoItem(photo: Omit<PhotoItem, 'id' | 'order' | 'createdAt'
 export function deletePhotoItem(id: string) {
   const index = photos.value.findIndex(p => p.id === id)
   if (index !== -1) {
-    const wasCover = photos.value[index].isCover
+    const target = photos.value[index]
+    const wasCover = target.isCover
+    // Delete from Firebase Storage if it's a firebase storage url
+    if (target.url && (target.url.includes('firebasestorage.googleapis.com') || target.url.startsWith('photos/'))) {
+      deleteFromFirebaseStorage(target.url)
+    }
     photos.value.splice(index, 1)
     // If cover was deleted, make first photo cover
     if (wasCover && photos.value.length > 0) {
@@ -160,9 +150,31 @@ export function deletePhotoItem(id: string) {
   }
 }
 
+export async function syncPhotosFromFirebaseStorage(): Promise<number> {
+  const items = await fetchPhotosFromFirebaseStorage()
+  if (items.length === 0) return 0
+
+  let addedCount = 0
+  for (const item of items) {
+    const alreadyExists = photos.value.some(p => p.url === item.url || p.url.includes(item.name))
+    if (!alreadyExists) {
+      addPhotoItem({
+        url: item.url,
+        caption: '',
+        isCover: photos.value.length === 0
+      })
+      addedCount++
+    }
+  }
+  return addedCount
+}
+
 export function setCoverPhotoItem(id: string) {
   photos.value.forEach(p => {
     p.isCover = p.id === id
+    if (p.isCover) {
+      p.isHidden = false // 대표 사진은 항상 노출
+    }
   })
 }
 
@@ -170,34 +182,44 @@ export function updatePhotoItem(id: string, updates: Partial<Omit<PhotoItem, 'id
   const photo = photos.value.find(p => p.id === id)
   if (photo) {
     Object.assign(photo, updates)
+    if (photo.isCover) {
+      photo.isHidden = false
+    }
   }
 }
 
 export function togglePhotoVisibility(id: string) {
   const photo = photos.value.find(p => p.id === id)
   if (photo) {
+    // 대표 사진은 숨김 처리할 수 없음
+    if (photo.isCover) {
+      photo.isHidden = false
+      return
+    }
     photo.isHidden = !photo.isHidden
   }
 }
 
 export function reorderPhotos(fromIndex: number, toIndex: number) {
-  if (fromIndex < 0 || fromIndex >= photos.value.length || toIndex < 0 || toIndex >= photos.value.length) return
-  const item = photos.value.splice(fromIndex, 1)[0]
-  photos.value.splice(toIndex, 0, item)
-  photos.value.forEach((p, idx) => {
+  // sortedPhotos와 1:1로 일치하도록 order 기준 정렬본을 복사하여 작업
+  const sorted = [...photos.value].sort((a, b) => a.order - b.order)
+  if (fromIndex < 0 || fromIndex >= sorted.length || toIndex < 0 || toIndex >= sorted.length) return
+  if (fromIndex === toIndex) return
+
+  const [movedItem] = sorted.splice(fromIndex, 1)
+  sorted.splice(toIndex, 0, movedItem)
+
+  sorted.forEach((p, idx) => {
     p.order = idx
   })
+
+  // 완전한 배열 교체로 Vue 반응성 및 로컬스토리지 watcher 트리거
+  photos.value = sorted
 }
 
 export function movePhotoItem(index: number, direction: 'up' | 'down') {
   const targetIndex = direction === 'up' ? index - 1 : index + 1
-  if (targetIndex < 0 || targetIndex >= photos.value.length) return
-  const temp = photos.value[index]
-  photos.value[index] = photos.value[targetIndex]
-  photos.value[targetIndex] = temp
-  photos.value.forEach((p, idx) => {
-    p.order = idx
-  })
+  reorderPhotos(index, targetIndex)
 }
 
 // RSVP operations

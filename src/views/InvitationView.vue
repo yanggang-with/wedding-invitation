@@ -43,10 +43,11 @@ const scrollToSection = (targetEl: HTMLElement) => {
   targetEl.scrollIntoView({ behavior: 'smooth', block: blockAlign })
 }
 
-// Desktop Mouse Wheel Handler (1 section per wheel scroll on PC)
+// 1. Desktop Mouse Wheel Handler (PC 마우스 휠 전용: 1틱당 1섹션 중앙 이동)
 const handleWheel = (e: WheelEvent) => {
-  // 모달(라이트박스 등)이 열려있거나 스크롤이 잠긴 경우 무시
+  // 터치 기기(모바일/태블릿)이거나 모달이 열려있으면 무시
   if (document.body.style.overflow === 'hidden') return
+  if (window.matchMedia('(pointer: coarse)').matches) return
 
   // 미세 떨림 무시
   if (Math.abs(e.deltaY) < 25) return
@@ -93,11 +94,13 @@ const handleWheel = (e: WheelEvent) => {
 
 onMounted(() => {
   document.documentElement.classList.add('snap-mode')
+  document.body.classList.add('snap-mode')
   window.addEventListener('wheel', handleWheel, { passive: false })
 })
 
 onUnmounted(() => {
   document.documentElement.classList.remove('snap-mode')
+  document.body.classList.remove('snap-mode')
   window.removeEventListener('wheel', handleWheel)
   if (wheelLockTimer) clearTimeout(wheelLockTimer)
 })

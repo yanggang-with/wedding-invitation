@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import {
   photos,
   uploadImage,
@@ -8,8 +8,15 @@ import {
   setCoverPhotoItem,
   updatePhotoItem,
   reorderPhotos,
-  togglePhotoVisibility
+  togglePhotoVisibility,
+  syncPhotosFromFirebaseStorage,
+  adminSettings
 } from '../../services/storage'
+import {
+  isFirebaseStorageReady,
+  getStorageBucketName,
+  initFirebase
+} from '../../services/firebase'
 import type { PhotoItem } from '../../types/wedding'
 import {
   UploadCloud,
@@ -23,7 +30,10 @@ import {
   GripVertical,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  Cloud,
+  Settings,
+  AlertCircle
 } from 'lucide-vue-next'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -33,6 +43,88 @@ const uploadProgressText = ref('')
 const urlInput = ref('')
 const urlCaption = ref('')
 const showUrlModal = ref(false)
+
+// Firebase State & Modal
+const isFirebaseReady = ref(isFirebaseStorageReady())
+const storageBucket = computed(() => getStorageBucketName() || adminSettings.value.firebaseConfig?.storageBucket || '')
+const isSyncing = ref(false)
+const showFirebaseModal = ref(false)
+
+const firebaseForm = ref({
+  apiKey: adminSettings.value.firebaseConfig?.apiKey || '',
+  projectId: adminSettings.value.firebaseConfig?.projectId || '',
+  storageBucket: adminSettings.value.firebaseConfig?.storageBucket || '',
+  appId: adminSettings.value.firebaseConfig?.appId || ''
+})
+
+const checkFirebaseStatus = () => {
+  isFirebaseReady.value = isFirebaseStorageReady()
+}
+
+const openFirebaseModal = () => {
+  firebaseForm.value = {
+    apiKey: adminSettings.value.firebaseConfig?.apiKey || '',
+    projectId: adminSettings.value.firebaseConfig?.projectId || '',
+    storageBucket: adminSettings.value.firebaseConfig?.storageBucket || '',
+    appId: adminSettings.value.firebaseConfig?.appId || ''
+  }
+  showFirebaseModal.value = true
+}
+
+const saveFirebaseConfig = () => {
+  if (!firebaseForm.value.apiKey.trim() || !firebaseForm.value.projectId.trim()) {
+    alert('API Key와 Project ID를 모두 입력해주세요.')
+    return
+  }
+
+  if (!adminSettings.value.firebaseConfig) {
+    adminSettings.value.firebaseConfig = {
+      apiKey: '',
+      authDomain: '',
+      projectId: '',
+      storageBucket: '',
+      messagingSenderId: '',
+      appId: ''
+    }
+  }
+
+  const pId = firebaseForm.value.projectId.trim()
+  adminSettings.value.firebaseConfig.apiKey = firebaseForm.value.apiKey.trim()
+  adminSettings.value.firebaseConfig.projectId = pId
+  adminSettings.value.firebaseConfig.storageBucket = firebaseForm.value.storageBucket.trim() || `${pId}.firebasestorage.app`
+  adminSettings.value.firebaseConfig.authDomain = `${pId}.firebaseapp.com`
+  adminSettings.value.firebaseConfig.appId = firebaseForm.value.appId.trim()
+  adminSettings.value.useFirebase = true
+
+  initFirebase(adminSettings.value.firebaseConfig)
+  checkFirebaseStatus()
+
+  showFirebaseModal.value = false
+  alert('Firebase Storage 설정이 저장되고 연동되었습니다!')
+}
+
+const handleSyncFromFirebase = async () => {
+  checkFirebaseStatus()
+  if (!isFirebaseReady.value) {
+    openFirebaseModal()
+    return
+  }
+
+  isSyncing.value = true
+  try {
+    const count = await syncPhotosFromFirebaseStorage()
+    if (count > 0) {
+      alert(`Firebase Storage에서 ${count}장의 새로운 사진을 가져왔습니다.`)
+    } else {
+      alert('Firebase Storage에 저장된 모든 사진이 이미 불러와져 있습니다.')
+    }
+  } catch (err: any) {
+    console.error('Firebase sync error:', err)
+    alert(`사진을 불러오는 중 오류가 발생했습니다: ${err.message || err}`)
+  } finally {
+    isSyncing.value = false
+  }
+}
 
 // Edit Modal State
 const isEditModalOpen = ref(false)
@@ -46,9 +138,11 @@ const editForm = ref({
 })
 const isReplacingImage = ref(false)
 
-// Drag and Drop State
-const draggedIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
+// Unified Drag State (PC Mouse & Mobile Touch)
+const isDragging = ref(false)
+const dragSourceIndex = ref<number | null>(null)
+const dragTargetIndex = ref<number | null>(null)
+const dragPosition = ref({ x: 0, y: 0 })
 
 const sortedPhotos = computed(() => {
   return [...photos.value].sort((a, b) => a.order - b.order)
@@ -62,23 +156,33 @@ const handleFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
 
+  checkFirebaseStatus()
+  if (!isFirebaseReady.value) {
+    openFirebaseModal()
+    alert('사진을 Firebase Storage에 저장하기 위해 먼저 Firebase 연동 설정을 완료해주세요.')
+    if (fileInputRef.value) fileInputRef.value.value = ''
+    return
+  }
+
   const files = Array.from(target.files)
   isUploading.value = true
 
   try {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      uploadProgressText.value = `사진 업로드 중 (${i + 1}/${files.length}): ${file.name}`
-      const url = await uploadImage(file)
+      uploadProgressText.value = `Firebase Storage 업로드 중 (${i + 1}/${files.length}): ${file.name}`
+      const url = await uploadImage(file, (percent) => {
+        uploadProgressText.value = `Firebase Storage 업로드 중 (${i + 1}/${files.length}) - ${percent}%`
+      })
       addPhotoItem({
         url,
         caption: '',
         isCover: photos.value.length === 0
       })
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('File upload error:', err)
-    alert('사진 업로드 중 오류가 발생했습니다.')
+    alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`)
   } finally {
     isUploading.value = false
     uploadProgressText.value = ''
@@ -99,7 +203,7 @@ const handleAddByUrl = () => {
 }
 
 const handleDelete = (id: string) => {
-  if (confirm('이 사진을 정말 삭제하시겠습니까?')) {
+  if (confirm('이 사진을 정말 삭제하시겠습니까? (Firebase Storage 연동 사진인 경우 스토리지에서도 함께 삭제됩니다)')) {
     deletePhotoItem(id)
   }
 }
@@ -127,18 +231,33 @@ const closeEditModal = () => {
   isReplacingImage.value = false
 }
 
+// 대표 사진으로 지정되면 숨김 설정을 자동으로 해제
+watch(() => editForm.value.isCover, (newCover) => {
+  if (newCover) {
+    editForm.value.isHidden = false
+  }
+})
+
 const handleReplaceFileChange = async (e: Event) => {
   const target = e.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
+
+  checkFirebaseStatus()
+  if (!isFirebaseReady.value) {
+    openFirebaseModal()
+    alert('사진을 교체하려면 먼저 Firebase Storage 연동 설정을 완료해주세요.')
+    if (replaceFileInputRef.value) replaceFileInputRef.value.value = ''
+    return
+  }
 
   const file = target.files[0]
   isReplacingImage.value = true
   try {
     const newUrl = await uploadImage(file)
     editForm.value.url = newUrl
-  } catch (err) {
+  } catch (err: any) {
     console.error('Replace image error:', err)
-    alert('사진 교체 중 오류가 발생했습니다.')
+    alert(`사진 교체 중 오류가 발생했습니다: ${err.message || err}`)
   } finally {
     isReplacingImage.value = false
     if (replaceFileInputRef.value) replaceFileInputRef.value.value = ''
@@ -150,53 +269,151 @@ const saveEditModal = () => {
     alert('이미지 주소 또는 사진을 등록해주세요.')
     return
   }
+  const isCoverPhoto = editForm.value.isCover
   updatePhotoItem(editForm.value.id, {
     url: editForm.value.url.trim(),
     caption: editForm.value.caption.trim(),
-    isCover: editForm.value.isCover,
-    isHidden: editForm.value.isHidden
+    isCover: isCoverPhoto,
+    isHidden: isCoverPhoto ? false : editForm.value.isHidden
   })
-  if (editForm.value.isCover) {
+  if (isCoverPhoto) {
     setCoverPhotoItem(editForm.value.id)
   }
   closeEditModal()
 }
 
-// Drag & Drop Reordering Handlers
-const handleDragStart = (index: number, e: DragEvent) => {
-  draggedIndex.value = index
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', String(index))
+// PC Mouse Drag Handlers
+let cleanupMouseMove: (() => void) | null = null
+
+const handleMouseDown = (index: number, e: MouseEvent) => {
+  if (e.button !== 0) return
+  const target = e.target as HTMLElement
+  if (target?.closest('button, input, textarea, a')) return
+
+  const startX = e.clientX
+  const startY = e.clientY
+  let hasMoved = false
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const dx = moveEvent.clientX - startX
+    const dy = moveEvent.clientY - startY
+    // 4px 이상 이동했을 때만 드래그 시작 (단순 클릭과 드래그 구분)
+    if (!hasMoved && Math.hypot(dx, dy) < 4) {
+      return
+    }
+    if (!hasMoved) {
+      hasMoved = true
+      isDragging.value = true
+      dragSourceIndex.value = index
+      dragTargetIndex.value = index
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'grabbing'
+    }
+
+    dragPosition.value = { x: moveEvent.clientX, y: moveEvent.clientY }
+
+    const el = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)
+    const card = el?.closest('.photo-card') as HTMLElement | null
+    if (card && card.dataset.index !== undefined) {
+      const idx = parseInt(card.dataset.index, 10)
+      if (!isNaN(idx) && idx >= 0 && idx < sortedPhotos.value.length) {
+        dragTargetIndex.value = idx
+      }
+    }
+  }
+
+  const onMouseUp = () => {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    cleanupMouseMove = null
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+
+    if (isDragging.value && dragSourceIndex.value !== null && dragTargetIndex.value !== null) {
+      if (dragSourceIndex.value !== dragTargetIndex.value) {
+        reorderPhotos(dragSourceIndex.value, dragTargetIndex.value)
+      }
+    }
+
+    isDragging.value = false
+    dragSourceIndex.value = null
+    dragTargetIndex.value = null
+  }
+
+  cleanupMouseMove = () => {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+// Mobile Touch Drag Handlers
+const handleTouchMove = (e: TouchEvent) => {
+  if (!isDragging.value || dragSourceIndex.value === null) return
+  if (e.cancelable) {
+    e.preventDefault() // 터치 드래그 중 브라우저 페이지 스크롤 방지
+  }
+  const touch = e.touches[0]
+  dragPosition.value = { x: touch.clientX, y: touch.clientY }
+
+  const el = document.elementFromPoint(touch.clientX, touch.clientY)
+  const card = el?.closest('.photo-card') as HTMLElement | null
+  if (card && card.dataset.index !== undefined) {
+    const idx = parseInt(card.dataset.index, 10)
+    if (!isNaN(idx) && idx >= 0 && idx < sortedPhotos.value.length) {
+      dragTargetIndex.value = idx
+    }
   }
 }
 
-const handleDragOver = (e: DragEvent, index: number) => {
-  e.preventDefault()
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'move'
+const handleTouchEnd = () => {
+  window.removeEventListener('touchmove', handleTouchMove)
+  window.removeEventListener('touchend', handleTouchEnd)
+  window.removeEventListener('touchcancel', handleTouchCancel)
+
+  if (isDragging.value && dragSourceIndex.value !== null && dragTargetIndex.value !== null) {
+    if (dragSourceIndex.value !== dragTargetIndex.value) {
+      reorderPhotos(dragSourceIndex.value, dragTargetIndex.value)
+    }
   }
-  dragOverIndex.value = index
+  isDragging.value = false
+  dragSourceIndex.value = null
+  dragTargetIndex.value = null
 }
 
-const handleDragLeave = (index: number) => {
-  if (dragOverIndex.value === index) {
-    dragOverIndex.value = null
-  }
+const handleTouchCancel = () => {
+  window.removeEventListener('touchmove', handleTouchMove)
+  window.removeEventListener('touchend', handleTouchEnd)
+  window.removeEventListener('touchcancel', handleTouchCancel)
+
+  isDragging.value = false
+  dragSourceIndex.value = null
+  dragTargetIndex.value = null
 }
 
-const handleDrop = (targetIndex: number) => {
-  if (draggedIndex.value !== null && draggedIndex.value !== targetIndex) {
-    reorderPhotos(draggedIndex.value, targetIndex)
-  }
-  draggedIndex.value = null
-  dragOverIndex.value = null
+const handleTouchStart = (index: number, e: TouchEvent) => {
+  if (e.touches.length !== 1) return
+  const touch = e.touches[0]
+  dragSourceIndex.value = index
+  dragTargetIndex.value = index
+  dragPosition.value = { x: touch.clientX, y: touch.clientY }
+  isDragging.value = true
+
+  window.addEventListener('touchmove', handleTouchMove, { passive: false })
+  window.addEventListener('touchend', handleTouchEnd)
+  window.addEventListener('touchcancel', handleTouchCancel)
 }
 
-const handleDragEnd = () => {
-  draggedIndex.value = null
-  dragOverIndex.value = null
-}
+onUnmounted(() => {
+  if (cleanupMouseMove) cleanupMouseMove()
+  window.removeEventListener('touchmove', handleTouchMove)
+  window.removeEventListener('touchend', handleTouchEnd)
+  window.removeEventListener('touchcancel', handleTouchCancel)
+})
 </script>
 
 <template>
@@ -245,6 +462,46 @@ const handleDragEnd = () => {
       </div>
     </div>
 
+    <!-- Firebase Storage Status & Sync Banner -->
+    <div
+      class="firebase-status-banner"
+      :class="{ 'is-connected': isFirebaseReady, 'is-disconnected': !isFirebaseReady }"
+    >
+      <div class="firebase-status-info">
+        <span class="status-indicator-dot" :class="{ 'online': isFirebaseReady, 'offline': !isFirebaseReady }"></span>
+        <span v-if="isFirebaseReady" class="firebase-status-text">
+          <Cloud :size="15" class="status-icon" />
+          <span><strong>Firebase Storage 연동됨</strong> <small v-if="storageBucket">({{ storageBucket }})</small></span>
+        </span>
+        <span v-else class="firebase-status-text">
+          <AlertCircle :size="15" class="status-icon warning" />
+          <span><strong>Firebase Storage 미연동</strong> <small>- 사진을 Cloud Storage에 저장하려면 연동 설정이 필요합니다.</small></span>
+        </span>
+      </div>
+
+      <div class="firebase-banner-actions">
+        <button
+          v-if="isFirebaseReady"
+          class="btn-banner-action sync-btn"
+          @click="handleSyncFromFirebase"
+          :disabled="isSyncing"
+          title="Firebase Storage에 저장된 모든 사진을 불러와 동기화합니다"
+        >
+          <RefreshCw :size="13" :class="{ 'spinning': isSyncing }" />
+          <span>{{ isSyncing ? '사진 동기화 중...' : 'Storage 사진 불러오기' }}</span>
+        </button>
+
+        <button
+          class="btn-banner-action config-btn"
+          @click="openFirebaseModal"
+          :title="isFirebaseReady ? 'Firebase 설정 변경' : 'Firebase Storage 설정 입력'"
+        >
+          <Settings :size="13" />
+          <span>{{ isFirebaseReady ? '연동 설정' : 'Firebase 설정하기' }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Upload Status Progress Banner -->
     <div v-if="isUploading" class="upload-banner">
       <div class="spinner"></div>
@@ -275,29 +532,47 @@ const handleDragEnd = () => {
     </div>
 
     <!-- 3x3 Photo Grid with Drag and Drop -->
-    <div class="photo-grid">
+    <div
+      class="photo-grid"
+      :class="{ 'is-dragging-active': isDragging }"
+    >
       <div
         v-for="(photo, index) in sortedPhotos"
         :key="photo.id"
+        :data-index="index"
         class="photo-card"
         :class="{
           'is-cover': photo.isCover,
           'is-hidden': photo.isHidden,
-          'is-dragging': draggedIndex === index,
-          'is-drag-over': dragOverIndex === index && draggedIndex !== index
+          'is-dragging': isDragging && dragSourceIndex === index,
+          'is-drag-over': isDragging && dragTargetIndex === index && dragSourceIndex !== index
         }"
-        draggable="true"
-        @dragstart="handleDragStart(index, $event)"
-        @dragover="handleDragOver($event, index)"
-        @dragleave="handleDragLeave(index)"
-        @drop="handleDrop(index)"
-        @dragend="handleDragEnd"
+        @mousedown="handleMouseDown(index, $event)"
       >
+        <!-- Drop Target Visual Indicator -->
+        <div
+          v-if="isDragging && dragTargetIndex === index && dragSourceIndex !== index"
+          class="drop-target-indicator"
+        >
+          <span>여기로 이동</span>
+        </div>
+
         <!-- Drag Handle & Badges -->
         <div class="photo-thumb-wrap">
-          <img :src="photo.url" :alt="photo.caption || '웨딩 사진'" class="photo-thumb" />
+          <img
+            :src="photo.url"
+            :alt="photo.caption || '웨딩 사진'"
+            class="photo-thumb"
+            draggable="false"
+          />
 
-          <div class="drag-handle-pill font-sans" title="마우스로 끌어서 순서 변경">
+          <!-- Drag Handle Pill (Supports Touch on mobile & Mouse drag on PC) -->
+          <div
+            class="drag-handle-pill font-sans"
+            title="마우스 또는 터치로 끌어서 순서 변경"
+            @mousedown.stop="handleMouseDown(index, $event)"
+            @touchstart.stop="handleTouchStart(index, $event)"
+          >
             <GripVertical :size="13" />
             <span>{{ index + 1 }}</span>
           </div>
@@ -320,7 +595,9 @@ const handleDragEnd = () => {
               <Edit3 :size="14" />
               <span>수정</span>
             </button>
+            <!-- 대표 사진은 숨김 불가 -->
             <button
+              v-if="!photo.isCover"
               class="overlay-btn toggle-btn"
               @click="togglePhotoVisibility(photo.id)"
               :title="photo.isHidden ? '청첩장에 노출하기' : '청첩장에서 숨기기'"
@@ -329,6 +606,14 @@ const handleDragEnd = () => {
               <EyeOff v-else :size="14" />
               <span>{{ photo.isHidden ? '보이기' : '숨기기' }}</span>
             </button>
+            <div
+              v-else
+              class="overlay-btn disabled-btn"
+              title="대표 사진은 메인 표지에 항상 노출됩니다"
+            >
+              <Eye :size="14" />
+              <span>대표 노출</span>
+            </div>
             <button class="overlay-btn delete-btn" @click="handleDelete(photo.id)" title="사진 삭제">
               <Trash2 :size="14" />
             </button>
@@ -343,7 +628,9 @@ const handleDragEnd = () => {
           </div>
 
           <div class="card-bottom-actions">
+            <!-- 대표 사진은 항상 노출 고정 -->
             <button
+              v-if="!photo.isCover"
               class="visibility-pill-btn"
               :class="{ 'is-hidden-state': photo.isHidden }"
               @click="togglePhotoVisibility(photo.id)"
@@ -353,6 +640,14 @@ const handleDragEnd = () => {
               <Eye v-else :size="12" />
               <span>{{ photo.isHidden ? '숨김됨' : '보이기' }}</span>
             </button>
+            <span
+              v-else
+              class="visibility-pill-btn is-cover-fixed"
+              title="대표 사진은 메인 표지에 사용되므로 항상 노출됩니다"
+            >
+              <Eye :size="12" />
+              <span>항상 노출</span>
+            </span>
 
             <div class="card-action-group">
               <button
@@ -376,6 +671,18 @@ const handleDragEnd = () => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Floating Ghost during Drag (PC Mouse & Mobile Touch) -->
+    <div
+      v-if="isDragging && dragSourceIndex !== null"
+      class="drag-ghost"
+      :style="{
+        transform: `translate3d(${dragPosition.x - 70}px, ${dragPosition.y - 45}px, 0)`
+      }"
+    >
+      <GripVertical :size="14" />
+      <span>{{ dragSourceIndex + 1 }}번 사진 이동 중</span>
     </div>
 
     <!-- Empty State -->
@@ -460,16 +767,20 @@ const handleDragEnd = () => {
           </div>
 
           <div class="form-group checkbox-group">
-            <label class="checkbox-label">
+            <label class="checkbox-label" :class="{ 'disabled-checkbox': editForm.isCover }">
               <input
                 v-model="editForm.isHidden"
                 type="checkbox"
                 class="checkbox-input"
+                :disabled="editForm.isCover"
               />
               <span :class="{ 'text-danger': editForm.isHidden }">
                 이 사진을 청첩장에서 숨기기 (비노출)
               </span>
             </label>
+            <p v-if="editForm.isCover" class="helper-text cover-hint">
+              * 대표 사진은 메인 표지에 표시되므로 숨길 수 없습니다.
+            </p>
           </div>
         </div>
 
@@ -478,6 +789,75 @@ const handleDragEnd = () => {
           <button class="btn-primary" @click="saveEditModal">
             <Check :size="14" />
             <span>저장하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Firebase Config Modal -->
+    <div v-if="showFirebaseModal" class="modal-backdrop" @click.self="showFirebaseModal = false">
+      <div class="modal-card card-paper">
+        <div class="modal-header">
+          <div class="modal-header-with-icon">
+            <Cloud :size="18" class="header-icon-cloud" />
+            <h4 class="modal-title font-serif">Firebase Storage 연동 설정</h4>
+          </div>
+          <button class="close-btn" @click="showFirebaseModal = false">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-desc-text">
+            Firebase 콘솔(Project Settings)의 웹 앱 구성 정보를 입력하시면, 관리자 페이지에서 올리는 사진이 <strong>Firebase Cloud Storage</strong>에 자동으로 업로드되고 저장된 고화질 이미지를 청첩장에 노출합니다.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">API Key <span class="required-star">*</span></label>
+            <input
+              v-model="firebaseForm.apiKey"
+              type="text"
+              placeholder="AIzaSy..."
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Project ID <span class="required-star">*</span></label>
+            <input
+              v-model="firebaseForm.projectId"
+              type="text"
+              placeholder="my-wedding-project"
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Storage Bucket (선택 - 기본값: {projectId}.firebasestorage.app)</label>
+            <input
+              v-model="firebaseForm.storageBucket"
+              type="text"
+              placeholder="my-wedding-project.firebasestorage.app"
+              class="input-field"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">App ID (선택)</label>
+            <input
+              v-model="firebaseForm.appId"
+              type="text"
+              placeholder="1:123456789:web:abcdef..."
+              class="input-field"
+            />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showFirebaseModal = false">취소</button>
+          <button class="btn-primary" @click="saveFirebaseConfig">
+            <Check :size="14" />
+            <span>연동 저장 및 활성화</span>
           </button>
         </div>
       </div>
@@ -629,6 +1009,12 @@ const handleDragEnd = () => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+  position: relative;
+}
+
+/* 드래그 중 자식 요소들이 이벤트를 가로채거나 깜빡임을 유발하지 않도록 격리 */
+.photo-grid.is-dragging-active .photo-card * {
+  pointer-events: none !important;
 }
 
 @media (max-width: 768px) {
@@ -646,6 +1032,7 @@ const handleDragEnd = () => {
 }
 
 .photo-card {
+  position: relative;
   background: #FFFFFF;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -653,9 +1040,10 @@ const handleDragEnd = () => {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .photo-card:active {
@@ -674,14 +1062,38 @@ const handleDragEnd = () => {
 }
 
 .photo-card.is-dragging {
-  opacity: 0.4;
-  transform: scale(0.96);
+  opacity: 0.35;
 }
 
 .photo-card.is-drag-over {
   border: 2px dashed var(--gold-primary);
-  background: var(--gold-soft);
-  transform: scale(1.02);
+  background: #FDF9F3;
+}
+
+/* 드롭 대상 위치 안내 오버레이 */
+.drop-target-indicator {
+  position: absolute;
+  inset: 0;
+  background: rgba(184, 153, 107, 0.2);
+  border: 2px dashed var(--gold-primary);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.drop-target-indicator span {
+  background: var(--gold-primary);
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  letter-spacing: -0.2px;
 }
 
 .photo-thumb-wrap {
@@ -697,6 +1109,9 @@ const handleDragEnd = () => {
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .photo-card:hover .photo-thumb {
@@ -707,18 +1122,28 @@ const handleDragEnd = () => {
   position: absolute;
   top: 8px;
   left: 8px;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(4px);
   color: #FFFFFF;
-  padding: 3px 8px;
+  padding: 4px 9px;
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 3px;
-  z-index: 2;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 5;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.drag-handle-pill:active {
+  cursor: grabbing;
+  background: var(--gold-primary);
 }
 
 .cover-badge {
@@ -798,6 +1223,18 @@ const handleDragEnd = () => {
   transform: translateY(-1px);
 }
 
+.overlay-btn.disabled-btn {
+  background: rgba(245, 240, 230, 0.95);
+  color: var(--gold-dark);
+  cursor: default;
+  box-shadow: none;
+}
+
+.overlay-btn.disabled-btn:hover {
+  background: rgba(245, 240, 230, 0.95);
+  transform: none;
+}
+
 .overlay-btn.delete-btn {
   color: var(--rose-accent);
   padding: 6px 8px;
@@ -868,6 +1305,18 @@ const handleDragEnd = () => {
   border-color: #F5C6CB;
 }
 
+.visibility-pill-btn.is-cover-fixed {
+  background: #F4EFE6;
+  color: var(--gold-dark);
+  border-color: var(--gold-light);
+  cursor: default;
+  opacity: 0.95;
+}
+
+.visibility-pill-btn.is-cover-fixed:hover {
+  filter: none;
+}
+
 .card-action-group {
   display: flex;
   align-items: center;
@@ -921,6 +1370,29 @@ const handleDragEnd = () => {
   background: var(--gold-soft);
   border-color: var(--gold-primary);
   color: var(--gold-dark);
+}
+
+/* Drag Ghost Preview (PC Mouse & Mobile Touch) */
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 9999;
+  background: rgba(44, 40, 37, 0.92);
+  color: #FFFFFF;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  will-change: transform;
 }
 
 .text-danger {
@@ -1112,6 +1584,22 @@ const handleDragEnd = () => {
   cursor: pointer;
 }
 
+.disabled-checkbox {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.disabled-checkbox .checkbox-input {
+  cursor: not-allowed !important;
+}
+
+.cover-hint {
+  color: var(--gold-dark);
+  font-size: 11px;
+  margin-top: 4px;
+  margin-left: 24px;
+}
+
 .modal-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border-color);
@@ -1129,5 +1617,140 @@ const handleDragEnd = () => {
 @keyframes spinSlow {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Firebase Storage Status Banner */
+.firebase-status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.firebase-status-banner.is-connected {
+  background: #EBF7EE;
+  border: 1px solid #C3E6CB;
+  color: #1E7E34;
+}
+
+.firebase-status-banner.is-disconnected {
+  background: #FFF9E6;
+  border: 1px solid #FFE082;
+  color: #996500;
+}
+
+.firebase-status-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-indicator-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-indicator-dot.online {
+  background: #28A745;
+  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+}
+
+.status-indicator-dot.offline {
+  background: #E67E22;
+  box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.25);
+}
+
+.firebase-status-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.firebase-status-text .status-icon {
+  flex-shrink: 0;
+}
+
+.firebase-status-text .status-icon.warning {
+  color: #E67E22;
+}
+
+.firebase-status-text small {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.firebase-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-banner-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid currentColor;
+  background: #FFFFFF;
+}
+
+.btn-banner-action.sync-btn {
+  color: #1E7E34;
+  border-color: #A3D9B1;
+}
+
+.btn-banner-action.sync-btn:hover:not(:disabled) {
+  background: #E1F5E6;
+}
+
+.btn-banner-action.config-btn {
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-banner-action.config-btn:hover {
+  background: var(--bg-warm);
+}
+
+.btn-banner-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Modal Enhancements */
+.modal-header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon-cloud {
+  color: var(--gold-primary);
+}
+
+.modal-desc-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+}
+
+.required-star {
+  color: #E74C3C;
+  font-weight: bold;
 }
 </style>

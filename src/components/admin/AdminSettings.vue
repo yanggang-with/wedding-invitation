@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { adminSettings, resetToSampleData } from '../../services/storage'
+import { initFirebase } from '../../services/firebase'
 import { KeyRound, Cloud, RotateCcw, Check, Save } from 'lucide-vue-next'
+
+if (!adminSettings.value.firebaseConfig) {
+  adminSettings.value.firebaseConfig = {
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+    appId: ''
+  }
+}
 
 const currentPin = ref('')
 const newPin = ref('')
@@ -38,6 +50,9 @@ const handleUpdatePin = () => {
 }
 
 const handleSaveFirebase = () => {
+  if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+    initFirebase(adminSettings.value.firebaseConfig)
+  }
   firebaseSavedMsg.value = true
   setTimeout(() => {
     firebaseSavedMsg.value = false

@@ -32,7 +32,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html.snap-mode {
+html.snap-mode,
+body.snap-mode {
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
@@ -59,10 +60,11 @@ html, body {
   width: 100%;
   max-width: 460px;
   min-height: 100vh;
+  min-height: 100svh;
   background-color: var(--bg-ivory);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip; /* clip preserves scroll-snap whereas hidden creates a broken scroll container */
   margin: 0 auto;
 }
 
