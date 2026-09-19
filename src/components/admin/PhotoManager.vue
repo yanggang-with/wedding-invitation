@@ -49,6 +49,7 @@ const isFirebaseReady = ref(isFirebaseStorageReady())
 const storageBucket = computed(() => getStorageBucketName() || adminSettings.value.firebaseConfig?.storageBucket || '')
 const isSyncing = ref(false)
 const showFirebaseModal = ref(false)
+const loadedAdminThumbs = ref<Record<string, boolean>>({})
 
 const firebaseForm = ref({
   apiKey: adminSettings.value.firebaseConfig?.apiKey || '',
@@ -553,17 +554,28 @@ onUnmounted(() => {
         <div
           v-if="isDragging && dragTargetIndex === index && dragSourceIndex !== index"
           class="drop-target-indicator"
+          :class="{ 'is-target-cover': index === 0 }"
         >
-          <span>여기로 이동</span>
+          <span>{{ index === 0 ? '★ 대표 사진으로 지정' : '여기로 이동' }}</span>
         </div>
 
         <!-- Drag Handle & Badges -->
         <div class="photo-thumb-wrap">
+          <!-- Skeleton Shimmer Loader while photo loads from Firebase -->
+          <div v-if="!loadedAdminThumbs[photo.id]" class="admin-thumb-skeleton">
+            <div class="admin-skeleton-shimmer"></div>
+            <div class="admin-mini-spin"></div>
+          </div>
+
           <img
             :src="photo.url"
             :alt="photo.caption || '웨딩 사진'"
             class="photo-thumb"
+            :class="{ 'is-loaded': loadedAdminThumbs[photo.id] }"
             draggable="false"
+            loading="lazy"
+            decoding="async"
+            @load="loadedAdminThumbs[photo.id] = true"
           />
 
           <!-- Drag Handle Pill (Supports Touch on mobile & Mouse drag on PC) -->
@@ -612,7 +624,7 @@ onUnmounted(() => {
               title="대표 사진은 메인 표지에 항상 노출됩니다"
             >
               <Eye :size="14" />
-              <span>대표 노출</span>
+              <span>대표</span>
             </div>
             <button class="overlay-btn delete-btn" @click="handleDelete(photo.id)" title="사진 삭제">
               <Trash2 :size="14" />
@@ -673,16 +685,25 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Floating Ghost during Drag (PC Mouse & Mobile Touch) -->
+    <!-- Floating Drag Card Ghost (PC Mouse & Mobile Touch) -->
     <div
-      v-if="isDragging && dragSourceIndex !== null"
-      class="drag-ghost"
+      v-if="isDragging && dragSourceIndex !== null && sortedPhotos[dragSourceIndex]"
+      class="drag-card-ghost"
       :style="{
-        transform: `translate3d(${dragPosition.x - 70}px, ${dragPosition.y - 45}px, 0)`
+        transform: `translate3d(${dragPosition.x - 45}px, ${dragPosition.y - 45}px, 0)`
       }"
     >
-      <GripVertical :size="14" />
-      <span>{{ dragSourceIndex + 1 }}번 사진 이동 중</span>
+      <div class="ghost-thumb-wrap">
+        <img
+          :src="sortedPhotos[dragSourceIndex].url"
+          class="ghost-thumb-img"
+          alt=""
+        />
+        <div class="ghost-badge">
+          <GripVertical :size="11" />
+          <span>{{ dragSourceIndex + 1 }}번 이동</span>
+        </div>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -935,6 +956,7 @@ onUnmounted(() => {
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hidden-file-input {
@@ -1096,6 +1118,18 @@ onUnmounted(() => {
   letter-spacing: -0.2px;
 }
 
+.drop-target-indicator.is-target-cover {
+  background: rgba(184, 153, 107, 0.32);
+  border: 2.5px solid var(--gold-primary);
+}
+
+.drop-target-indicator.is-target-cover span {
+  background: var(--gold-dark);
+  border: 1px solid var(--gold-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  color: #FFFFFF;
+}
+
 .photo-thumb-wrap {
   position: relative;
   width: 100%;
@@ -1104,14 +1138,54 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.admin-thumb-skeleton {
+  position: absolute;
+  inset: 0;
+  background: #EFE7DA;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.admin-skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 231, 218, 0) 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(239, 231, 218, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.admin-mini-spin {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(168, 131, 80, 0.25);
+  border-top-color: var(--gold-primary);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  z-index: 2;
+  opacity: 0.85;
+}
+
 .photo-thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.3s ease;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.photo-thumb.is-loaded {
+  opacity: 1;
 }
 
 .photo-card:hover .photo-thumb {
@@ -1372,27 +1446,54 @@ onUnmounted(() => {
   color: var(--gold-dark);
 }
 
-/* Drag Ghost Preview (PC Mouse & Mobile Touch) */
-.drag-ghost {
+/* Drag Ghost Preview with image card (PC Mouse & Mobile Touch) */
+.drag-card-ghost {
   position: fixed;
   top: 0;
   left: 0;
   pointer-events: none !important;
   user-select: none;
   -webkit-user-select: none;
-  z-index: 9999;
-  background: rgba(44, 40, 37, 0.92);
+  z-index: 99999;
+  will-change: transform;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.35));
+}
+
+.ghost-thumb-wrap {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2.5px solid var(--gold-primary);
+  background: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transform: rotate(3deg) scale(1.05);
+}
+
+.ghost-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ghost-badge {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
   color: #FFFFFF;
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(6px);
-  will-change: transform;
+  gap: 3px;
+  white-space: nowrap;
 }
 
 .text-danger {

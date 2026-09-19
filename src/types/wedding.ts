@@ -83,6 +83,18 @@ export interface GuestbookItem {
   createdAt: string
 }
 
+export interface LiveSnapItem {
+  id: string
+  type: 'image' | 'video'
+  url: string
+  thumbnailUrl?: string
+  senderName?: string
+  message?: string
+  fileSize?: number
+  isHidden?: boolean
+  createdAt: string
+}
+
 export interface FirebaseConfigSetting {
   apiKey: string
   authDomain: string
@@ -96,4 +108,8 @@ export interface AdminSettings {
   adminPin: string
   firebaseConfig?: FirebaseConfigSetting
   useFirebase: boolean
+  forceShowLiveSnap?: boolean
+  googleDriveScriptUrl?: string
+  googleDriveFolderId?: string
+  useGoogleDriveStorage?: boolean
 }

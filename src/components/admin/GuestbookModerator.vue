@@ -233,4 +233,19 @@ const toggleVisibility = (entry: GuestbookItem) => {
 .empty-icon {
   color: var(--border-color);
 }
+
+@media (max-width: 640px) {
+  .message-card {
+    padding: 14px 16px;
+  }
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .action-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 </style>

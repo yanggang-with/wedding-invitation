@@ -1,8 +1,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { adminSettings, resetToSampleData } from '../../services/storage'
-import { initFirebase } from '../../services/firebase'
-import { KeyRound, Cloud, RotateCcw, Check, Save } from 'lucide-vue-next'
+import {
+  adminSettings,
+  resetToSampleData,
+  isCloudSyncing,
+  lastCloudSyncTime,
+  isCloudConnected,
+  forceUploadToCloud,
+  forceDownloadFromCloud,
+  initCloudSubscriptions
+} from '../../services/storage'
+import { initFirebase, checkFirestoreStatus } from '../../services/firebase'
+import {
+  KeyRound,
+  Cloud,
+  RotateCcw,
+  Check,
+  Save,
+  RefreshCw,
+  UploadCloud,
+  DownloadCloud,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-vue-next'
 
 if (!adminSettings.value.firebaseConfig) {
   adminSettings.value.firebaseConfig = {
@@ -22,6 +42,8 @@ const pinSuccessMsg = ref('')
 const pinErrorMsg = ref('')
 
 const firebaseSavedMsg = ref(false)
+const isCheckingConnection = ref(false)
+const testResult = ref<{ ok: boolean; message: string } | null>(null)
 
 const handleUpdatePin = () => {
   pinErrorMsg.value = ''
@@ -52,11 +74,51 @@ const handleUpdatePin = () => {
 const handleSaveFirebase = () => {
   if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
     initFirebase(adminSettings.value.firebaseConfig)
+    initCloudSubscriptions()
   }
   firebaseSavedMsg.value = true
   setTimeout(() => {
     firebaseSavedMsg.value = false
   }, 2500)
+}
+
+const handleCheckConnection = async () => {
+  isCheckingConnection.value = true
+  testResult.value = null
+  try {
+    const res = await checkFirestoreStatus()
+    testResult.value = res
+  } catch (err: any) {
+    testResult.value = { ok: false, message: `점검 실패: ${err.message || err}` }
+  } finally {
+    isCheckingConnection.value = false
+  }
+}
+
+const handleForceUpload = async () => {
+  if (confirm('현재 기기의 모든 설정값(예식 정보, 사진 목록, 계좌번호 등)을 클라우드(Firestore)로 즉시 저장하시겠습니까?')) {
+    try {
+      await forceUploadToCloud()
+      alert('클라우드로 모든 설정이 안전하게 저장되었습니다!')
+    } catch (err: any) {
+      alert(`클라우드 업로드 실패: ${err.message || err}`)
+    }
+  }
+}
+
+const handleForceDownload = async () => {
+  if (confirm('클라우드(Firestore)에 저장된 최신 데이터를 가져와 현재 화면에 적용하시겠습니까?')) {
+    try {
+      const ok = await forceDownloadFromCloud()
+      if (ok) {
+        alert('클라우드의 최신 데이터를 성공적으로 불러왔습니다!')
+      } else {
+        alert('클라우드에 저장된 데이터가 없습니다.')
+      }
+    } catch (err: any) {
+      alert(`클라우드 불러오기 실패: ${err.message || err}`)
+    }
+  }
 }
 
 const handleResetSample = () => {
@@ -197,11 +259,51 @@ const handleResetSample = () => {
             </div>
           </div>
 
-          <button class="btn-primary sub-btn" @click="handleSaveFirebase">
-            <Check v-if="firebaseSavedMsg" :size="15" />
-            <Save v-else :size="15" />
-            <span>{{ firebaseSavedMsg ? '설정 저장됨' : 'Firebase 설정 저장' }}</span>
-          </button>
+          <div class="firebase-btn-row">
+            <button class="btn-primary sub-btn" @click="handleSaveFirebase">
+              <Check v-if="firebaseSavedMsg" :size="15" />
+              <Save v-else :size="15" />
+              <span>{{ firebaseSavedMsg ? '설정 저장됨' : 'Firebase 설정 저장' }}</span>
+            </button>
+          </div>
+
+          <!-- Cloud Firestore Sync Status & Tools -->
+          <div class="cloud-status-card">
+            <div class="cloud-status-header">
+              <div class="status-left">
+                <span class="status-dot" :class="{ active: isCloudConnected, syncing: isCloudSyncing }"></span>
+                <span class="status-title font-medium">
+                  {{ isCloudSyncing ? '클라우드 실시간 동기화 중...' : (isCloudConnected ? 'Cloud Firestore 실시간 연동 활성화' : '클라우드 미연동 (로컬 모드)') }}
+                </span>
+              </div>
+              <span v-if="lastCloudSyncTime" class="sync-time">최종 동기화: {{ lastCloudSyncTime }}</span>
+            </div>
+
+            <p class="cloud-help-text">
+              어느 기기(PC, 스마트폰)에서든 관리자 설정을 변경하면 Cloud Firestore에 즉시 저장되고, 하객 및 다른 기기에 실시간 자동 반영됩니다.
+            </p>
+
+            <div class="cloud-actions-row">
+              <button class="btn-tool" :disabled="isCheckingConnection" @click="handleCheckConnection">
+                <RefreshCw :size="14" :class="{ 'spin-anim': isCheckingConnection }" />
+                <span>{{ isCheckingConnection ? '확인 중...' : '연결 상태 점검' }}</span>
+              </button>
+              <button class="btn-tool" :disabled="isCloudSyncing" @click="handleForceUpload">
+                <UploadCloud :size="14" />
+                <span>클라우드로 전체 저장</span>
+              </button>
+              <button class="btn-tool" :disabled="isCloudSyncing" @click="handleForceDownload">
+                <DownloadCloud :size="14" />
+                <span>클라우드에서 불러오기</span>
+              </button>
+            </div>
+
+            <div v-if="testResult" class="test-result-box" :class="testResult.ok ? 'success' : 'error'">
+              <CheckCircle2 v-if="testResult.ok" :size="16" class="flex-shrink-0" />
+              <AlertCircle v-else :size="16" class="flex-shrink-0" />
+              <span class="test-msg">{{ testResult.message }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -303,6 +405,9 @@ const handleResetSample = () => {
 }
 
 .input-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   padding: 9px 12px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -418,5 +523,170 @@ input:checked + .slider:before {
 
 .reset-btn:hover {
   background: #FEECEB;
+}
+
+.firebase-btn-row {
+  display: flex;
+  margin-top: 4px;
+}
+
+.cloud-status-card {
+  margin-top: 14px;
+  padding: 16px;
+  background: #FAF8F5;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cloud-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #CBD5E1;
+  transition: all 0.3s;
+}
+
+.status-dot.active {
+  background: #10B981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.status-dot.syncing {
+  background: #F59E0B;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.status-title {
+  font-size: 13.5px;
+  color: var(--text-main);
+}
+
+.sync-time {
+  font-size: 11.5px;
+  color: var(--text-sub);
+}
+
+.cloud-help-text {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.cloud-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-tool:hover:not(:disabled) {
+  background: #F3F0EB;
+  border-color: var(--gold-primary);
+  color: var(--gold-primary);
+}
+
+.btn-tool:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spin-anim {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.test-result-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.test-result-box.success {
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+
+.test-result-box.error {
+  background: #FEF2F2;
+  color: #991B1B;
+  border: 1px solid #FECACA;
+}
+
+.test-msg {
+  white-space: pre-line;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .pin-form {
+    max-width: 100%;
+  }
+
+  .sub-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .block-card {
+    padding: 18px 14px;
+  }
+
+  .cloud-actions-row {
+    flex-direction: column;
+  }
+
+  .btn-tool {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

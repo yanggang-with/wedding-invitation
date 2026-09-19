@@ -306,6 +306,9 @@ const handleDeleteAccount = (id: string) => {
 }
 
 .input-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid var(--border-color);
@@ -464,5 +467,37 @@ const handleDeleteAccount = (id: string) => {
 .cancel-btn {
   font-size: 12px;
   padding: 8px 14px;
+}
+
+@media (max-width: 640px) {
+  .manager-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .add-account-box {
+    padding: 16px 14px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .item-view-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .card-action-btns {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>

@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { weddingInfo, formatWeddingDate } from '../../services/storage'
 import { Save, Check, Calendar, Eye } from 'lucide-vue-next'
 
 const savedNotice = ref(false)
+const isDirty = ref(false)
+let initialSnapshot = JSON.stringify(weddingInfo.value)
+
+watch(
+  () => weddingInfo.value,
+  (newVal) => {
+    isDirty.value = JSON.stringify(newVal) !== initialSnapshot
+  },
+  { deep: true }
+)
 
 const DATE_FORMAT_PRESETS = [
   { label: '2026년 12월 12일 토요일 오후 6시', value: 'YYYY년 M월 D일 dddd A h시' },
@@ -28,6 +38,13 @@ const formattedDatePreview = computed(() => {
 })
 
 const handleSave = () => {
+  try {
+    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+  } catch (e) {
+    console.error('Failed to persist wedding info:', e)
+  }
+  initialSnapshot = JSON.stringify(weddingInfo.value)
+  isDirty.value = false
   savedNotice.value = true
   setTimeout(() => {
     savedNotice.value = false
@@ -43,7 +60,11 @@ const handleSave = () => {
         <p class="editor-desc">청첩장에 표기될 기본 정보와 모시는 글을 수정합니다.</p>
       </div>
 
-      <button class="btn-primary save-btn" @click="handleSave">
+      <button
+        class="btn-primary save-btn"
+        :class="{ 'is-dirty': isDirty, 'is-saved': savedNotice }"
+        @click="handleSave"
+      >
         <Check v-if="savedNotice" :size="16" />
         <Save v-else :size="16" />
         <span>{{ savedNotice ? '저장 완료!' : '변경사항 저장' }}</span>
@@ -346,6 +367,34 @@ const handleSave = () => {
         </div>
       </div>
     </div>
+
+    <!-- Floating Save Button (Fade in when text/info is modified) -->
+    <Transition name="floating-save-fade">
+      <div v-if="isDirty || savedNotice" class="floating-save-container">
+        <div class="floating-save-card font-sans">
+          <div class="floating-save-info">
+            <span v-if="savedNotice" class="status-badge saved">
+              <Check :size="15" class="status-icon" />
+              <span>변경사항이 저장되었습니다!</span>
+            </span>
+            <span v-else class="status-badge dirty">
+              <span class="pulse-dot"></span>
+              <span>수정된 내용이 있습니다</span>
+            </span>
+          </div>
+
+          <button
+            class="btn-primary floating-action-btn"
+            :class="{ 'btn-saved': savedNotice }"
+            @click="handleSave"
+          >
+            <Check v-if="savedNotice" :size="16" />
+            <Save v-else :size="16" />
+            <span>{{ savedNotice ? '저장 완료' : '예식 정보 저장' }}</span>
+          </button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -421,6 +470,9 @@ const handleSave = () => {
 }
 
 .input-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   padding: 9px 12px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -536,5 +588,163 @@ const handleSave = () => {
 .preview-text {
   color: var(--gold-dark);
   font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .editor-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .save-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .form-block {
+    padding: 18px 14px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-group.full {
+    grid-column: auto;
+  }
+
+  .deceased-checks {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .preview-inner {
+    flex-wrap: wrap;
+  }
+}
+
+/* Floating Save Button Bar */
+.floating-save-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: calc(100% - 32px);
+  max-width: 480px;
+  pointer-events: none;
+}
+
+.floating-save-card {
+  pointer-events: auto;
+  background: rgba(36, 32, 29, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  padding: 8px 12px 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.floating-save-info {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-badge.dirty {
+  color: #F7F2EA;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #F59E0B;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  animation: pulse-ring 1.8s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+.status-badge.saved {
+  color: #86EFAC;
+  font-weight: 600;
+}
+
+.floating-action-btn {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(168, 131, 80, 0.35);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.floating-action-btn.btn-saved {
+  background-color: #2E7D32;
+  border-color: #2E7D32;
+  box-shadow: 0 4px 14px rgba(46, 125, 50, 0.35);
+}
+
+.save-btn.is-dirty {
+  box-shadow: 0 0 0 3px rgba(168, 131, 80, 0.35);
+}
+
+.save-btn.is-saved {
+  background-color: #2E7D32;
+  border-color: #2E7D32;
+}
+
+/* Floating Save Fade & Slide Transitions */
+.floating-save-fade-enter-active {
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.floating-save-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease-in;
+}
+
+.floating-save-fade-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+
+.floating-save-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 15px);
 }
 </style>

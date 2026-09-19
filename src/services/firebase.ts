@@ -1,5 +1,17 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  collection,
+  query,
+  orderBy,
+  type Firestore,
+  type Unsubscribe
+} from 'firebase/firestore'
 import {
   getStorage,
   ref,
@@ -10,7 +22,7 @@ import {
   deleteObject,
   type FirebaseStorage
 } from 'firebase/storage'
-import type { FirebaseConfigSetting } from '../types/wedding'
+import type { FirebaseConfigSetting, PhotoItem, WeddingInfo, AccountItem, RsvpItem, GuestbookItem, LiveSnapItem } from '../types/wedding'
 
 let app: FirebaseApp | null = null
 let db: Firestore | null = null
@@ -62,6 +74,13 @@ export function initFirebase(config?: FirebaseConfigSetting) {
 
 export function isFirebaseStorageReady(): boolean {
   return storage !== null
+}
+
+export function isFirestoreReady(): boolean {
+  if (!db) {
+    initFirebase()
+  }
+  return db !== null
 }
 
 export function getStorageBucketName(): string {
@@ -217,3 +236,210 @@ export async function deleteFromFirebaseStorage(urlOrPath: string): Promise<void
 export function getFirebaseInstances() {
   return { app, db, storage }
 }
+
+// -------------------------------------------------------------
+// Cloud Firestore Data Synchronization API
+// -------------------------------------------------------------
+
+export interface WeddingCloudData {
+  weddingInfo: WeddingInfo
+  photos: PhotoItem[]
+  accounts: AccountItem[]
+  adminSettings?: any
+  updatedAt?: string
+}
+
+export async function saveWeddingContentToFirestore(data: {
+  weddingInfo: WeddingInfo
+  photos: PhotoItem[]
+  accounts: AccountItem[]
+  adminSettings?: any
+}): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) throw new Error('Firestore가 초기화되지 않았습니다.')
+  }
+  const contentRef = doc(db, 'wedding_data', 'content')
+  await setDoc(contentRef, {
+    weddingInfo: JSON.parse(JSON.stringify(data.weddingInfo)),
+    photos: JSON.parse(JSON.stringify(data.photos)),
+    accounts: JSON.parse(JSON.stringify(data.accounts)),
+    ...(data.adminSettings ? { adminSettings: JSON.parse(JSON.stringify(data.adminSettings)) } : {}),
+    updatedAt: new Date().toISOString()
+  }, { merge: true })
+}
+
+export async function fetchWeddingContentFromFirestore(): Promise<WeddingCloudData | null> {
+  if (!db) {
+    initFirebase()
+    if (!db) return null
+  }
+  const contentRef = doc(db, 'wedding_data', 'content')
+  const snap = await getDoc(contentRef)
+  if (snap.exists()) {
+    return snap.data() as WeddingCloudData
+  }
+  return null
+}
+
+export function subscribeWeddingContent(
+  callback: (data: WeddingCloudData) => void,
+  onError?: (err: any) => void
+): Unsubscribe | null {
+  if (!db) {
+    initFirebase()
+    if (!db) return null
+  }
+  const contentRef = doc(db, 'wedding_data', 'content')
+  return onSnapshot(contentRef, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data() as WeddingCloudData)
+    }
+  }, (err) => {
+    console.warn('Firestore wedding_data/content subscription error:', err)
+    if (onError) onError(err)
+  })
+}
+
+// Guestbook Firestore Operations
+export function subscribeGuestbook(
+  callback: (items: GuestbookItem[]) => void,
+  onError?: (err: any) => void
+): Unsubscribe | null {
+  if (!db) {
+    initFirebase()
+    if (!db) return null
+  }
+  const gbCol = collection(db, 'guestbook_entries')
+  const q = query(gbCol, orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (querySnap) => {
+    const items: GuestbookItem[] = []
+    querySnap.forEach((docSnap) => {
+      items.push(docSnap.data() as GuestbookItem)
+    })
+    callback(items)
+  }, (err) => {
+    console.warn('Firestore guestbook subscription error:', err)
+    if (onError) onError(err)
+  })
+}
+
+export async function saveGuestbookDoc(item: GuestbookItem): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  const cleanItem = JSON.parse(JSON.stringify(item))
+  await setDoc(doc(db, 'guestbook_entries', item.id), cleanItem)
+}
+
+export async function deleteGuestbookDoc(id: string): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  await deleteDoc(doc(db, 'guestbook_entries', id))
+}
+
+// RSVP Firestore Operations
+export function subscribeRsvp(
+  callback: (items: RsvpItem[]) => void,
+  onError?: (err: any) => void
+): Unsubscribe | null {
+  if (!db) {
+    initFirebase()
+    if (!db) return null
+  }
+  const rsvpCol = collection(db, 'rsvp_entries')
+  const q = query(rsvpCol, orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (querySnap) => {
+    const items: RsvpItem[] = []
+    querySnap.forEach((docSnap) => {
+      items.push(docSnap.data() as RsvpItem)
+    })
+    callback(items)
+  }, (err) => {
+    console.warn('Firestore RSVP subscription error:', err)
+    if (onError) onError(err)
+  })
+}
+
+export async function saveRsvpDoc(item: RsvpItem): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  const cleanItem = JSON.parse(JSON.stringify(item))
+  await setDoc(doc(db, 'rsvp_entries', item.id), cleanItem)
+}
+
+export async function deleteRsvpDoc(id: string): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  await deleteDoc(doc(db, 'rsvp_entries', id))
+}
+
+// LiveSnap Firestore Operations
+export function subscribeLiveSnaps(
+  callback: (items: LiveSnapItem[]) => void,
+  onError?: (err: any) => void
+): Unsubscribe | null {
+  if (!db) {
+    initFirebase()
+    if (!db) return null
+  }
+  const snapCol = collection(db, 'livesnap_entries')
+  const q = query(snapCol, orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (querySnap) => {
+    const items: LiveSnapItem[] = []
+    querySnap.forEach((docSnap) => {
+      items.push(docSnap.data() as LiveSnapItem)
+    })
+    callback(items)
+  }, (err) => {
+    console.warn('Firestore LiveSnap subscription error:', err)
+    if (onError) onError(err)
+  })
+}
+
+export async function saveLiveSnapDoc(item: LiveSnapItem): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  const cleanItem = JSON.parse(JSON.stringify(item))
+  await setDoc(doc(db, 'livesnap_entries', item.id), cleanItem)
+}
+
+export async function deleteLiveSnapDoc(id: string): Promise<void> {
+  if (!db) {
+    initFirebase()
+    if (!db) return
+  }
+  await deleteDoc(doc(db, 'livesnap_entries', id))
+}
+
+export async function checkFirestoreStatus(): Promise<{ ok: boolean; message: string }> {
+  if (!db) {
+    initFirebase()
+    if (!db) {
+      return { ok: false, message: 'Firebase Firestore가 초기화되지 않았습니다.' }
+    }
+  }
+  try {
+    const testRef = doc(db, 'wedding_data', 'content')
+    await getDoc(testRef)
+    return { ok: true, message: 'Cloud Firestore가 정상적으로 연동되어 있습니다.' }
+  } catch (err: any) {
+    if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+      return {
+        ok: false,
+        message: 'Firestore 접근 권한이 없습니다. Firebase 콘솔의 Firestore ➔ [Rules] 탭에서 allow read, write: if true; 로 설정 후 [게시]해주세요.'
+      }
+    }
+    return { ok: false, message: `Firestore 연결 오류: ${err.message || err}` }
+  }
+}
+

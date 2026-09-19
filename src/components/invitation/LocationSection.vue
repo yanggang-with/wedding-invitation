@@ -54,8 +54,11 @@ const windowOpen = (url: string) => {
       <p class="venue-hall font-serif">{{ venue.hall }}</p>
       
       <div class="address-box font-sans">
-        <MapPin :size="15" class="pin-icon" />
-        <span class="addr-text">{{ venue.address }} {{ venue.addressDetail }}</span>
+        <MapPin :size="16" class="pin-icon" />
+        <div class="addr-text-group">
+          <span class="addr-main">{{ venue.address }}</span>
+          <span v-if="venue.addressDetail" class="addr-detail">{{ venue.addressDetail }}</span>
+        </div>
         <button class="copy-btn" @click="copyAddress" title="주소 복사">
           <Check v-if="copied" :size="13" class="text-green" />
           <Copy v-else :size="13" />
@@ -200,19 +203,41 @@ const windowOpen = (url: string) => {
 .address-box {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   background: #FFFFFF;
-  padding: 8px 14px;
-  border-radius: 9999px;
+  padding: 10px 16px;
+  border-radius: 14px;
   border: 1px solid var(--border-color);
-  font-size: 13px;
-  color: var(--text-sub);
+  box-shadow: var(--shadow-sm);
   margin-bottom: 8px;
+  text-align: left;
+  max-width: 95%;
 }
 
 .pin-icon {
   color: var(--gold-primary);
   flex-shrink: 0;
+  align-self: center;
+}
+
+.addr-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.addr-main {
+  font-size: 13.5px;
+  color: var(--text-main);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.addr-detail {
+  font-size: 12px;
+  color: var(--gold-dark);
+  line-height: 1.35;
 }
 
 .copy-btn {
@@ -222,11 +247,13 @@ const windowOpen = (url: string) => {
   background: var(--bg-subtle);
   border: 1px solid var(--border-color);
   border-radius: 9999px;
-  padding: 3px 8px;
+  padding: 5px 10px;
   font-size: 11px;
   color: var(--text-main);
   cursor: pointer;
-  margin-left: 4px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .copy-btn:hover {

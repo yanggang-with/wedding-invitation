@@ -1,11 +1,73 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { photos, weddingInfo } from '../../services/storage'
+import { photos, weddingInfo, getOptimizedImageUrl, isStoryOpen } from '../../services/storage'
+import type { PhotoItem } from '../../types/wedding'
 import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause } from 'lucide-vue-next'
 
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
 const INITIAL_COUNT = 9
+
+// --- Thumbnail Loading Delay Optimization ---
+const loadedThumbnails = ref<Record<string, boolean>>({})
+const onThumbnailLoad = (id: string) => {
+  loadedThumbnails.value[id] = true
+}
+
+// --- Mobile Long-Press Peek Preview Popup ---
+const peekPhoto = ref<PhotoItem | null>(null)
+const isPeeking = ref(false)
+const isPeekImageLoaded = ref(false)
+let peekTimer: any = null
+let touchStartX = 0
+let touchStartY = 0
+let isLongPressActive = false
+
+const handleThumbnailTouchStart = (photo: PhotoItem, e: TouchEvent) => {
+  if (!e.touches.length) return
+  touchStartX = e.touches[0].clientX
+  touchStartY = e.touches[0].clientY
+  isLongPressActive = false
+  clearTimeout(peekTimer)
+
+  peekTimer = setTimeout(() => {
+    isLongPressActive = true
+    isPeekImageLoaded.value = false
+    peekPhoto.value = photo
+    isPeeking.value = true
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(35)
+      } catch (_) {}
+    }
+  }, 320)
+}
+
+const handleThumbnailTouchMove = (e: TouchEvent) => {
+  if (!e.touches.length) return
+  const touch = e.touches[0]
+  const dist = Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY)
+  if (dist > 12) {
+    clearTimeout(peekTimer)
+  }
+}
+
+const handleThumbnailTouchEnd = (e: TouchEvent) => {
+  clearTimeout(peekTimer)
+  if (isPeeking.value) {
+    isPeeking.value = false
+    peekPhoto.value = null
+    e.preventDefault()
+  }
+}
+
+const handleThumbnailClick = (index: number) => {
+  if (isLongPressActive) {
+    isLongPressActive = false
+    return
+  }
+  openLightbox(index)
+}
 
 const sortedPhotos = computed(() => {
   return photos.value
@@ -74,6 +136,7 @@ const runProgressAnim = () => {
 
 const openLightbox = (index: number) => {
   selectedIndex.value = index
+  isStoryOpen.value = true
   progress.value = 0
   pausedProgress = 0
   isPaused.value = false
@@ -86,6 +149,7 @@ const closeLightbox = () => {
   stopProgressAnim()
   clearTimeout(holdTimer)
   selectedIndex.value = null
+  isStoryOpen.value = false
   isHolding.value = false
   document.body.style.overflow = ''
 }
@@ -95,7 +159,11 @@ const prevPhoto = () => {
   stopProgressAnim()
   progress.value = 0
   pausedProgress = 0
-  selectedIndex.value = (selectedIndex.value - 1 + sortedPhotos.value.length) % sortedPhotos.value.length
+  if (selectedIndex.value > 0) {
+    selectedIndex.value = selectedIndex.value - 1
+  } else {
+    selectedIndex.value = 0
+  }
   runProgressAnim()
 }
 
@@ -104,7 +172,12 @@ const nextPhoto = () => {
   stopProgressAnim()
   progress.value = 0
   pausedProgress = 0
-  selectedIndex.value = (selectedIndex.value + 1) % sortedPhotos.value.length
+  if (selectedIndex.value >= sortedPhotos.value.length - 1) {
+    // 맨 마지막 사진에 도달했을 때 첫 번째 사진으로 가지 않고 닫힘
+    closeLightbox()
+    return
+  }
+  selectedIndex.value = selectedIndex.value + 1
   runProgressAnim()
 }
 
@@ -216,6 +289,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   stopProgressAnim()
   clearTimeout(holdTimer)
+  clearTimeout(peekTimer)
+  isStoryOpen.value = false
   document.body.style.overflow = ''
 })
 </script>
@@ -229,23 +304,33 @@ onUnmounted(() => {
     <h2 class="section-title font-serif">우리의 아름다운 순간</h2>
     <p class="section-subtitle font-serif">사진을 터치하시면 스토리가 재생됩니다</p>
 
-    <!-- 3-Column Thumbnail Grid -->
+    <!-- 3-Column Thumbnail Grid with Skeleton Shimmer & Long-Press Peek -->
     <div class="gallery-grid">
       <div
         v-for="(photo, index) in displayedPhotos"
         :key="photo.id"
         class="thumbnail-card"
-        @click="openLightbox(index)"
+        @touchstart="handleThumbnailTouchStart(photo, $event)"
+        @touchmove="handleThumbnailTouchMove"
+        @touchend="handleThumbnailTouchEnd"
+        @touchcancel="handleThumbnailTouchEnd"
+        @click="handleThumbnailClick(index)"
       >
+        <!-- Skeleton Placeholder while loading from Firebase -->
+        <div v-if="!loadedThumbnails[photo.id]" class="thumbnail-skeleton">
+          <div class="skeleton-shimmer"></div>
+          <div class="skeleton-pulse-ring"></div>
+        </div>
+
         <img
-          :src="photo.url"
+          :src="getOptimizedImageUrl(photo.url, 400, 75)"
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
+          :class="{ 'is-loaded': loadedThumbnails[photo.id] }"
           loading="lazy"
+          decoding="async"
+          @load="onThumbnailLoad(photo.id)"
         />
-        <div class="thumbnail-overlay">
-          <span class="view-indicator">✦</span>
-        </div>
       </div>
     </div>
 
@@ -257,6 +342,39 @@ onUnmounted(() => {
       </button>
     </div>
 
+    <!-- Mobile Touch & Hold Peek Preview Layer Popup -->
+    <Transition name="peek-fade">
+      <div
+        v-if="isPeeking && peekPhoto"
+        class="peek-modal-overlay"
+        @contextmenu.prevent
+      >
+        <div class="peek-card">
+          <div class="peek-badge-row">
+            <span class="peek-badge font-sans">미리보기</span>
+          </div>
+          <div class="peek-image-container">
+            <!-- Peek Skeleton Loader -->
+            <div v-if="!isPeekImageLoaded" class="peek-skeleton">
+              <div class="skeleton-shimmer"></div>
+              <div class="peek-spinner"></div>
+            </div>
+            <img
+              :src="getOptimizedImageUrl(peekPhoto.url, 800, 85)"
+              :alt="peekPhoto.caption || '사진 미리보기'"
+              class="peek-image"
+              :class="{ 'is-loaded': isPeekImageLoaded }"
+              @load="isPeekImageLoaded = true"
+            />
+          </div>
+          <div v-if="peekPhoto.caption" class="peek-caption font-serif">
+            {{ peekPhoto.caption }}
+          </div>
+          <p class="peek-hint font-sans">손을 떼면 미리보기가 닫힙니다</p>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Fullscreen Instagram Story Modal -->
     <Transition name="story-modal-fade">
       <div
@@ -267,7 +385,7 @@ onUnmounted(() => {
         <!-- Desktop Ambient Blurred Background from active photo -->
         <div
           class="story-bg-blur"
-          :style="{ backgroundImage: `url(${sortedPhotos[selectedIndex].url})` }"
+          :style="{ backgroundImage: `url(${getOptimizedImageUrl(sortedPhotos[selectedIndex].url, 200, 40)})` }"
         ></div>
 
         <!-- Story Frame (Mobile Fullscreen, PC Phone Aspect-Ratio) -->
@@ -300,7 +418,7 @@ onUnmounted(() => {
             <div class="story-profile">
               <div class="story-avatar-ring">
                 <img
-                  :src="sortedPhotos[0]?.url || sortedPhotos[selectedIndex].url"
+                  :src="getOptimizedImageUrl(sortedPhotos[0]?.url || sortedPhotos[selectedIndex].url, 120, 80)"
                   alt="Avatar"
                   class="story-avatar-img"
                 />
@@ -344,7 +462,7 @@ onUnmounted(() => {
             <Transition name="photo-fade" mode="out-in">
               <img
                 :key="sortedPhotos[selectedIndex].id"
-                :src="sortedPhotos[selectedIndex].url"
+                :src="getOptimizedImageUrl(sortedPhotos[selectedIndex].url, 1200, 85)"
                 :alt="sortedPhotos[selectedIndex].caption || '웨딩 스토리 사진'"
                 class="story-image"
                 draggable="false"
@@ -411,13 +529,65 @@ onUnmounted(() => {
   overflow: hidden;
   cursor: pointer;
   background-color: var(--bg-warm);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.thumbnail-skeleton {
+  position: absolute;
+  inset: 0;
+  background: #EFE7DA;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 231, 218, 0) 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(239, 231, 218, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-pulse-ring {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(168, 131, 80, 0.25);
+  border-top-color: var(--gold-primary);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  z-index: 2;
+  opacity: 0.85;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .thumbnail-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.35s ease;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.thumbnail-img.is-loaded {
+  opacity: 1;
 }
 
 .thumbnail-overlay {
@@ -812,5 +982,147 @@ onUnmounted(() => {
 .hold-fade-enter-from,
 .hold-fade-leave-to {
   opacity: 0;
+}
+
+/* =========================================================
+   Mobile Touch & Hold Peek Preview Layer Popup
+   ========================================================= */
+
+.peek-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 13, 11, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.peek-card {
+  width: 100%;
+  max-width: 320px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 14px;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.peek-badge-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.peek-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--gold-dark);
+  background: var(--gold-soft);
+  border: 1px solid var(--border-color);
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
+.peek-image-container {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1e1b18;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  position: relative;
+}
+
+.peek-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  background: #2a2521;
+}
+
+.peek-spinner {
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--gold-primary);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+  z-index: 3;
+}
+
+.peek-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.peek-image.is-loaded {
+  opacity: 1;
+}
+
+.peek-caption {
+  font-size: 13.5px;
+  color: var(--text-main);
+  text-align: center;
+  line-height: 1.45;
+  padding: 2px 8px 0;
+  word-break: keep-all;
+}
+
+.peek-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  margin-top: 2px;
+}
+
+/* Peek Transitions */
+.peek-fade-enter-active {
+  transition: opacity 0.2s ease-out;
+}
+
+.peek-fade-enter-active .peek-card {
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.peek-fade-leave-active {
+  transition: opacity 0.18s ease-in;
+}
+
+.peek-fade-leave-active .peek-card {
+  transition: transform 0.18s ease-in;
+}
+
+.peek-fade-enter-from {
+  opacity: 0;
+}
+
+.peek-fade-enter-from .peek-card {
+  transform: scale(0.88);
+}
+
+.peek-fade-leave-to {
+  opacity: 0;
+}
+
+.peek-fade-leave-to .peek-card {
+  transform: scale(0.92);
 }
 </style>

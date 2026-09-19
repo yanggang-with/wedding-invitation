@@ -427,4 +427,22 @@ const handleDelete = (id: string) => {
   padding: 36px 0;
   color: var(--text-muted);
 }
+
+@media (max-width: 640px) {
+  .viewer-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .filter-buttons {
+    flex-wrap: wrap;
+  }
+}
 </style>
