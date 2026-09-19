@@ -36,7 +36,7 @@ const googleDriveFolderId = ref(adminSettings.value.googleDriveFolderId || '')
 const isTestingDrive = ref(false)
 const driveTestResult = ref<{ ok: boolean; message: string } | null>(null)
 const isCopiedScript = ref(false)
-const showGuide = ref(true)
+const showGuide = ref(false)
 const saveFeedback = ref('')
 const selectedSnap = ref<LiveSnapItem | null>(null)
 

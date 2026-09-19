@@ -69,7 +69,11 @@ const handleLogout = () => {
 }
 
 const goToInvitation = () => {
-  window.open('/', '_blank')
+  // 현재 URL에서 해시(#/admin 등)를 제거하고 기본 청첩장 메인 URL로 새 탭 열기
+  // 예: https://yanggang-with.github.io/wedding-invitation/#/admin -> https://yanggang-with.github.io/wedding-invitation/
+  // 예: https://oppsjw.github.io/wedding-invitation/#/admin -> https://oppsjw.github.io/wedding-invitation/
+  const baseUrl = window.location.href.split('#')[0]
+  window.open(baseUrl, '_blank')
 }
 </script>
 

@@ -27,9 +27,9 @@ const currentSectionIndex = ref(0)
 let scrollThrottle: any = null
 
 const updateCurrentSection = () => {
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
   if (!sections.length) return
-  currentSectionIndex.value = getCurrentSectionIndex(sections, window.innerHeight)
+  currentSectionIndex.value = getCurrentSectionIndex(sections)
 }
 
 const isNavActive = (itemSectionIndex: number) => {
@@ -41,7 +41,7 @@ const isNavActive = (itemSectionIndex: number) => {
 }
 
 const navigateTo = (sectionIndex: number) => {
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
   if (sections[sectionIndex]) {
     scrollToSection(sections[sectionIndex])
     currentSectionIndex.value = sectionIndex
@@ -102,22 +102,14 @@ const handleScroll = () => {
   })
 }
 
-// Desktop Mouse Wheel state
-let isWheelLocked = false
-let wheelLockTimer: any = null
-
-// Calculate the index of the currently most visible section
-const getCurrentSectionIndex = (sections: HTMLElement[], windowHeight: number): number => {
+// Section visibility calculation for bottom navigation
+const getCurrentSectionIndex = (sections: HTMLElement[]): number => {
   let currentIndex = 0
-  let maxVisibleHeight = -1
+  const threshold = window.innerHeight * 0.35
 
   sections.forEach((sec, idx) => {
     const rect = sec.getBoundingClientRect()
-    const visibleTop = Math.max(0, rect.top)
-    const visibleBottom = Math.min(windowHeight, rect.bottom)
-    const visibleHeight = Math.max(0, visibleBottom - visibleTop)
-    if (visibleHeight > maxVisibleHeight) {
-      maxVisibleHeight = visibleHeight
+    if (rect.top <= threshold) {
       currentIndex = idx
     }
   })
@@ -125,136 +117,76 @@ const getCurrentSectionIndex = (sections: HTMLElement[], windowHeight: number): 
   return currentIndex
 }
 
-// Scroll to target section ensuring it is centered vertically on PC
+// Smoothly scroll to target section without snapping
 const scrollToSection = (targetEl: HTMLElement) => {
-  const windowHeight = window.innerHeight
-  const targetHeight = targetEl.getBoundingClientRect().height
-  // On desktop/PC, if the section fits within the viewport, center it; otherwise align to start
-  const blockAlign = targetHeight <= windowHeight ? 'center' : 'start'
-  targetEl.scrollIntoView({ behavior: 'smooth', block: blockAlign })
-}
-
-// 1. Desktop Mouse Wheel Handler (PC 마우스 휠 전용: 1틱당 1섹션 중앙 이동)
-const handleWheel = (e: WheelEvent) => {
-  // 터치 기기(모바일/태블릿)이거나 모달이 열려있으면 무시
-  if (document.body.style.overflow === 'hidden') return
-  if (window.matchMedia('(pointer: coarse)').matches) return
-
-  // 미세 떨림 무시
-  if (Math.abs(e.deltaY) < 25) return
-
-  // 휠 잠금 디바운싱
-  if (isWheelLocked) {
-    e.preventDefault()
-    return
-  }
-
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.snap-section'))
-  if (!sections.length) return
-
-  const windowHeight = window.innerHeight
-  const currentIndex = getCurrentSectionIndex(sections, windowHeight)
-  const currentRect = sections[currentIndex].getBoundingClientRect()
-
-  // 긴 섹션(갤러리 등)에서 내부 내용이 아직 남아있으면 일반 스크롤 허용
-  if (e.deltaY > 0 && currentRect.bottom > windowHeight + 40) {
-    return
-  }
-  if (e.deltaY < 0 && currentRect.top < -40) {
-    return
-  }
-
-  // 섹션 단위 이동
-  let targetIndex = currentIndex
-  if (e.deltaY > 0 && currentIndex < sections.length - 1) {
-    targetIndex = currentIndex + 1
-  } else if (e.deltaY < 0 && currentIndex > 0) {
-    targetIndex = currentIndex - 1
-  }
-
-  if (targetIndex !== currentIndex) {
-    e.preventDefault()
-    isWheelLocked = true
-    scrollToSection(sections[targetIndex])
-    clearTimeout(wheelLockTimer)
-    wheelLockTimer = setTimeout(() => {
-      isWheelLocked = false
-    }, 650)
-  }
+  targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(() => {
-  document.documentElement.classList.add('snap-mode')
-  document.body.classList.add('snap-mode')
-  window.addEventListener('wheel', handleWheel, { passive: false })
   window.addEventListener('scroll', handleScroll, { passive: true })
   updateCurrentSection()
 })
 
 onUnmounted(() => {
-  document.documentElement.classList.remove('snap-mode')
-  document.body.classList.remove('snap-mode')
-  window.removeEventListener('wheel', handleWheel)
   window.removeEventListener('scroll', handleScroll)
   if (scrollThrottle) cancelAnimationFrame(scrollThrottle)
-  if (wheelLockTimer) clearTimeout(wheelLockTimer)
 })
 </script>
 
 <template>
-  <main class="mobile-frame snap-container">
+  <main class="mobile-frame invitation-main-container">
     <!-- Floating BGM Player -->
     <BgmPlayer />
 
     <!-- 1. Cover Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <CoverSection />
-    </section>
+    </div>
 
     <!-- 2. Greeting & Contact Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <GreetingSection />
-    </section>
+    </div>
 
     <!-- 3. Wedding Calendar & D-Day Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <CalendarSection />
-    </section>
+    </div>
 
     <!-- 4. Wedding Photos Gallery Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <GallerySection />
-    </section>
+    </div>
 
     <!-- 5. Location & Map & Navigation Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <LocationSection />
-    </section>
+    </div>
 
     <!-- 6. Bank Account & Congratulatory Gift Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <AccountSection />
-    </section>
+    </div>
 
     <!-- 7. RSVP Attendance Survey Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <RsvpSection />
-    </section>
+    </div>
 
     <!-- 8. Guestbook Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <GuestbookSection />
-    </section>
+    </div>
 
     <!-- 9. Live Snap Section (Visible on wedding day or if force-shown) -->
-    <section v-if="isLiveSnapVisible" class="snap-section">
+    <div v-if="isLiveSnapVisible" class="invitation-section-wrapper">
       <LiveSnapSection />
-    </section>
+    </div>
 
     <!-- 10. Share & Footer Section -->
-    <section class="snap-section">
+    <div class="invitation-section-wrapper">
       <ShareFooter />
-    </section>
+    </div>
 
     <!-- Floating Bottom Navigation & Share Bar (Hidden on Section 0 / Home and when Story Modal is open) -->
     <Transition name="nav-fade">
@@ -288,29 +220,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.snap-container {
+.invitation-main-container {
   width: 100%;
 }
 
-.snap-section {
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
-  min-height: 100vh;
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center; /* PC에서 화면 세로 중앙 배치 */
-  align-items: center;
+.invitation-section-wrapper {
+  width: 100%;
   box-sizing: border-box;
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-/* Ensure inner section content centers vertically on taller PC screens */
-.snap-section > :deep(*) {
-  width: 100%;
-  margin-top: auto;
-  margin-bottom: auto;
 }
 
 /* Floating Bottom Navigation & Share Bar Wrapper */
@@ -443,16 +359,4 @@ onUnmounted(() => {
   transform: translate(-50%, 20px);
 }
 
-/* Mobile responsive adjustments */
-@media (max-width: 768px) {
-  .snap-section {
-    min-height: 100vh;
-    min-height: 100svh;
-    scroll-snap-align: start; /* 단일 스냅 포인트로 역스크롤 시 버벅임 방지 */
-    scroll-snap-stop: always;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-}
 </style>

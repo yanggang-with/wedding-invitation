@@ -32,13 +32,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html.snap-mode,
-body.snap-mode {
-  scroll-snap-type: y mandatory;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: none;
-}
-
 html, body {
   background-color: #EDE8DE;
   color: var(--text-main);
@@ -46,6 +39,7 @@ html, body {
   line-height: 1.6;
   min-height: 100vh;
   word-break: keep-all;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Outer layout: Mobile frame centered on desktop */
