@@ -59,7 +59,21 @@ export const accounts = ref<AccountItem[]>(loadFromStorage<AccountItem[]>(STORAG
 export const rsvpList = ref<RsvpItem[]>(loadFromStorage<RsvpItem[]>(STORAGE_KEYS.RSVP, []))
 export const guestbook = ref<GuestbookItem[]>(loadFromStorage<GuestbookItem[]>(STORAGE_KEYS.GUESTBOOK, DEFAULT_GUESTBOOK))
 export const adminSettings = ref<AdminSettings>(loadFromStorage<AdminSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_ADMIN_SETTINGS))
-export const liveSnaps = ref<LiveSnapItem[]>(loadFromStorage<LiveSnapItem[]>(STORAGE_KEYS.LIVESNAPS, DEFAULT_LIVE_SNAPS))
+function loadInitialLiveSnaps(): LiveSnapItem[] {
+  const loaded = loadFromStorage<LiveSnapItem[]>(STORAGE_KEYS.LIVESNAPS, DEFAULT_LIVE_SNAPS)
+  if (!loaded || loaded.length === 0) return DEFAULT_LIVE_SNAPS
+  // If only old default dummy items were stored, upgrade to the new varied default snaps
+  const isAllDefaultDummies = loaded.every(s => s.id.startsWith('snap-'))
+  if (isAllDefaultDummies && loaded.length < DEFAULT_LIVE_SNAPS.length) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(DEFAULT_LIVE_SNAPS))
+    } catch (_) {}
+    return DEFAULT_LIVE_SNAPS
+  }
+  return loaded
+}
+
+export const liveSnaps = ref<LiveSnapItem[]>(loadInitialLiveSnaps())
 
 // 대표 사진이 항상 무조건 1번째(index 0)에 위치하도록 보장하는 헬퍼
 export function ensureCoverPhotoFirst() {
@@ -478,14 +492,16 @@ export function initCloudSubscriptions() {
     })
   }
 
-  // 4. 현장 스냅 실시간 구독
+  // 4. 현장 스냅 실시간 구독 (추가/수정/삭제 실시간 반영)
   if (!unsubLiveSnaps) {
     unsubLiveSnaps = subscribeLiveSnaps((items) => {
       isApplyingCloudUpdate = true
       try {
-        if (items && items.length > 0) {
+        if (items) {
           liveSnaps.value = items
-          localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(items))
+          try {
+            localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(items))
+          } catch (_) {}
         }
       } finally {
         setTimeout(() => {
@@ -494,6 +510,17 @@ export function initCloudSubscriptions() {
       }
     })
   }
+}
+
+// 브라우저 탭 간 실시간 동기화 (관리자 페이지에서 삭제/추가 시 청첩장 탭 즉시 반영)
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEYS.LIVESNAPS && e.newValue) {
+      try {
+        liveSnaps.value = JSON.parse(e.newValue)
+      } catch (_) {}
+    }
+  })
 }
 
 // 수동 클라우드 업로드 / 다운로드 함수
@@ -843,6 +870,21 @@ export function isWeddingDayOrLater(weddingDateStr?: string, forceShow?: boolean
   const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
 
   return todayStr >= targetDateStr
+}
+
+/**
+ * Checks if live snap uploading is currently active:
+ * Active starting 2 hours before the wedding ceremony time, or if forceShow is enabled.
+ */
+export function isLiveSnapUploadActive(weddingDateStr?: string, forceShow?: boolean): boolean {
+  if (forceShow) return true
+  if (!weddingDateStr) return true
+  const weddingTime = new Date(weddingDateStr).getTime()
+  if (isNaN(weddingTime)) return true
+
+  const now = Date.now()
+  const twoHoursBefore = weddingTime - (2 * 60 * 60 * 1000)
+  return now >= twoHoursBefore
 }
 
 export { checkFirestoreStatus }

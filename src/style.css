@@ -29,7 +29,18 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+button, a, input, select, textarea {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+button:focus,
+button:focus-visible,
+a:focus,
+a:focus-visible {
+  outline: none !important;
 }
 
 html, body {

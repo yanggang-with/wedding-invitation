@@ -192,7 +192,8 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-1',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=800&q=80',
+    // Vertical portrait (3:4 ratio)
+    url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&h=800&q=80',
     senderName: '친구 민우',
     message: '오늘 두 사람 너무 멋지고 아름다워요! 행복하게 잘 살아~ 🎉',
     createdAt: new Date().toISOString()
@@ -200,7 +201,8 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-2',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
+    // Horizontal landscape (16:10 ratio)
+    url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=800&h=500&q=80',
     senderName: '직장 동료',
     message: '결혼식장 생화 장식도 너무 예쁘네요. 축하드립니다!',
     createdAt: new Date(Date.now() - 3600000).toISOString()
@@ -208,7 +210,8 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-3',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=800&q=80',
+    // Tall vertical portrait (9:15 ratio)
+    url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=600&h=950&q=80',
     senderName: '사촌 지은',
     message: '신부 입장할 때 눈물 날 뻔했어요 ㅠㅠ 너무 예뻐요!',
     createdAt: new Date(Date.now() - 7200000).toISOString()
@@ -216,7 +219,8 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-4',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80',
+    // Square (1:1 ratio)
+    url: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=600&h=600&q=80',
     senderName: '대학 동기',
     message: '선남선녀의 완벽한 결혼식! 꽃길만 걷자 ✨',
     createdAt: new Date(Date.now() - 10800000).toISOString()
@@ -224,7 +228,8 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-5',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=800&q=80',
+    // Wide horizontal landscape (16:9 ratio)
+    url: 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=800&h=450&q=80',
     senderName: '친구 소영',
     message: '반지 교환할 때 너무 감동적이었어요 💍',
     createdAt: new Date(Date.now() - 14400000).toISOString()
@@ -232,10 +237,29 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {
     id: 'snap-6',
     type: 'image',
-    url: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=800&q=80',
+    // Medium vertical portrait (4:5 ratio)
+    url: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=600&h=750&q=80',
     senderName: '친척 형',
     message: '새로운 인생의 출발을 진심으로 응원합니다!',
     createdAt: new Date(Date.now() - 18000000).toISOString()
+  },
+  {
+    id: 'snap-7',
+    type: 'image',
+    // Horizontal landscape (4:3 ratio)
+    url: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=800&h=600&q=80',
+    senderName: '고등학교 동창',
+    message: '식장이 너무 화사하고 아름답네요. 축하해!',
+    createdAt: new Date(Date.now() - 21600000).toISOString()
+  },
+  {
+    id: 'snap-8',
+    type: 'image',
+    // Tall vertical portrait (2:3 ratio)
+    url: 'https://images.unsplash.com/photo-1544077960-604201fe74bc?auto=format&fit=crop&w=600&h=900&q=80',
+    senderName: '사촌 동생',
+    message: '세상에서 가장 빛나는 신랑 신부님 축복합니다~',
+    createdAt: new Date(Date.now() - 25200000).toISOString()
   }
 ]
 

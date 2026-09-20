@@ -91,6 +91,7 @@ export interface LiveSnapItem {
   senderName?: string
   message?: string
   fileSize?: number
+  aspectRatio?: string
   isHidden?: boolean
   createdAt: string
 }

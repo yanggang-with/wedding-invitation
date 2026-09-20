@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Camera, Play, Pause, X, Upload, CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import {
   liveSnaps,
@@ -7,18 +7,72 @@ import {
   adminSettings,
   addLiveSnap,
   uploadLiveSnapMedia,
-  isWeddingDayOrLater,
-  isStoryOpen
+  isLiveSnapUploadActive,
+  isStoryOpen,
+  photos,
+  initCloudSubscriptions
 } from '../../services/storage'
+import { DEFAULT_PHOTOS } from '../../constants/initialData'
 import type { LiveSnapItem } from '../../types/wedding'
 
-const isVisible = computed(() => {
-  return isWeddingDayOrLater(weddingInfo.value.date, adminSettings.value.forceShowLiveSnap)
+onMounted(() => {
+  initCloudSubscriptions()
 })
 
-// Filter out hidden snaps for guest view
-const visibleSnaps = computed(() => {
-  return liveSnaps.value.filter(s => !s.isHidden)
+// Section is always visible even before wedding ceremony
+const isVisible = computed(() => true)
+
+// Upload button active starting 2 hours before ceremony or if forceShow is enabled
+const isUploadActive = computed(() => {
+  return isLiveSnapUploadActive(weddingInfo.value.date, adminSettings.value.forceShowLiveSnap)
+})
+
+
+// 실제 사용자가 업로드한 스냅 (더미 snap-1 등 제외)
+const userUploadedSnaps = computed(() => {
+  return liveSnaps.value.filter(s => !s.isHidden && !s.id.startsWith('snap-'))
+})
+
+// 사용자가 업로드한 사진이 1장 이상 있는지 여부
+const hasUserSnaps = computed(() => {
+  return userUploadedSnaps.value.length > 0
+})
+
+// 갤러리 섹션의 사진 중 6개를 선택하여 예시 스냅으로 사용 (2개 열에 각 3개씩 완벽 균형)
+const galleryExampleSnaps = computed<LiveSnapItem[]>(() => {
+  const source = (photos.value && photos.value.length > 0)
+    ? photos.value.filter(p => !p.isHidden)
+    : DEFAULT_PHOTOS
+  const baseList = source.length > 0 ? source : DEFAULT_PHOTOS
+
+  // 항상 6장을 채우도록 보장 (사진 수가 6장 미만인 경우 순환하여 채움)
+  const selected: typeof baseList = []
+  for (let i = 0; i < 6; i++) {
+    selected.push(baseList[i % baseList.length])
+  }
+
+  // 메이슨리 룩을 위한 다양한 종횡비 지정
+  const ratios = ['4/5', '1/1', '3/2', '4/5', '16/9', '4/5']
+
+  return selected.map((p, idx) => ({
+    id: `gallery-example-${p.id || idx}-${idx}`,
+    type: 'image' as const,
+    url: p.url,
+    senderName: '웨딩 갤러리',
+    message: p.caption || '',
+    aspectRatio: ratios[idx % ratios.length],
+    createdAt: p.createdAt || new Date().toISOString()
+  }))
+})
+
+// 표시에 사용할 스냅 데이터
+// 1) 사용자가 올린 사진이 없으면(ON/OFF 무관) 항상 갤러리 예시 사진 6장 사용
+// 2) 사용자가 올린 사진이 1장 이상이면 실제 사용자 업로드 사진 사용
+const currentDisplaySnaps = computed(() => {
+  if (hasUserSnaps.value) {
+    return userUploadedSnaps.value
+  }
+  return galleryExampleSnaps.value
 })
 
 // Auto-scroll Infinite Columns
@@ -29,46 +83,58 @@ const togglePause = () => {
 
 interface StreamCardItem {
   id: string
-  isPlaceholder: boolean
-  data?: LiveSnapItem
+  data: LiveSnapItem
+  aspectRatio: string
+  isExample: boolean
 }
 
 const MIN_COL_ITEMS = 3
 
-// Column streams with placeholder boxes when snaps count is small
+// Column streams (clean snap photos)
 const streamColumns = computed(() => {
-  const snaps = visibleSnaps.value
-  if (snaps.length === 0) {
-    return { col1: [], col2: [] }
-  }
-
+  const snaps = currentDisplaySnaps.value
   const realCol1 = snaps.filter((_, i) => i % 2 === 0)
   const realCol2 = snaps.filter((_, i) => i % 2 === 1)
 
-  const targetPerCol = Math.max(MIN_COL_ITEMS, realCol1.length, realCol2.length)
-
-  const col1Base: StreamCardItem[] = realCol1.map(s => ({
-    id: s.id,
-    isPlaceholder: false,
-    data: s
-  }))
-  while (col1Base.length < targetPerCol) {
-    col1Base.push({
-      id: `placeholder-c1-${col1Base.length}`,
-      isPlaceholder: true
-    })
+  const checkIsExample = (item: LiveSnapItem) => {
+    return !hasUserSnaps.value || item.id.startsWith('gallery-example-') || item.id.startsWith('fallback-')
   }
 
-  const col2Base: StreamCardItem[] = realCol2.map(s => ({
+  const col1Base: StreamCardItem[] = realCol1.map((s, idx) => ({
     id: s.id,
-    isPlaceholder: false,
-    data: s
+    data: s,
+    aspectRatio: s.aspectRatio || (idx === 1 ? '1/1' : idx === 2 ? '3/2' : '4/5'),
+    isExample: checkIsExample(s)
   }))
-  while (col2Base.length < targetPerCol) {
-    col2Base.push({
-      id: `placeholder-c2-${col2Base.length}`,
-      isPlaceholder: true
-    })
+
+  const col2Base: StreamCardItem[] = realCol2.map((s, idx) => ({
+    id: s.id,
+    data: s,
+    aspectRatio: s.aspectRatio || (idx === 0 ? '1/1' : idx === 2 ? '16/9' : '4/5'),
+    isExample: checkIsExample(s)
+  }))
+
+  // 사용자들이 사진을 올린 상태일 때: 열 균형 유지를 위해 갤러리 사진으로 부족분 채움
+  if (isUploadActive.value && hasUserSnaps.value) {
+    const targetPerCol = Math.max(MIN_COL_ITEMS, realCol1.length, realCol2.length)
+    while (col1Base.length < targetPerCol) {
+      const fallbackSnap = galleryExampleSnaps.value[col1Base.length % galleryExampleSnaps.value.length]
+      col1Base.push({
+        id: `fallback-c1-${col1Base.length}`,
+        data: fallbackSnap,
+        aspectRatio: '4/5',
+        isExample: true
+      })
+    }
+    while (col2Base.length < targetPerCol) {
+      const fallbackSnap = galleryExampleSnaps.value[(col2Base.length + 1) % galleryExampleSnaps.value.length]
+      col2Base.push({
+        id: `fallback-c2-${col2Base.length}`,
+        data: fallbackSnap,
+        aspectRatio: '4/5',
+        isExample: true
+      })
+    }
   }
 
   // Duplicate for seamless translateY(-50%) infinite scroll
@@ -80,6 +146,12 @@ const streamColumns = computed(() => {
 
 const col1Items = computed(() => streamColumns.value.col1)
 const col2Items = computed(() => streamColumns.value.col2)
+
+function handleCompleteConfirm() {
+  isCompleteModalOpen.value = false
+  message.value = ''
+  senderName.value = ''
+}
 
 // Upload Modal State
 const isUploadModalOpen = ref(false)
@@ -105,6 +177,20 @@ watch([selectedSnap, isUploadModalOpen, isCompleteModalOpen], ([snap, upload, co
 onUnmounted(() => {
   isStoryOpen.value = false
 })
+
+function handleSnapClick(snap?: LiveSnapItem, isExample?: boolean) {
+  // When OFF (before wedding) or an example photo, preview lightbox is disabled
+  if (!isUploadActive.value || !snap || isExample) return
+  selectedSnap.value = snap
+}
+
+function handleUploadButtonClick() {
+  if (!isUploadActive.value) {
+    alert('현장 사진 및 동영상 올리기는 예식 당일 2시간 전부터 활성화됩니다.')
+    return
+  }
+  openUploadModal()
+}
 
 function openUploadModal() {
   resetForm()
@@ -224,18 +310,21 @@ function formatRelativeTime(isoString: string): string {
     <h2 class="section-title font-serif">현장 스냅</h2>
     <p class="section-subtitle font-serif">오늘의 소중한 순간들을 사진과 영상으로 함께 남겨주세요</p>
 
-    <!-- Action Buttons Row (Only visible when snaps exist) -->
-    <div v-if="visibleSnaps.length > 0" class="action-buttons-wrap font-sans">
-      <button class="btn-primary snap-main-upload-btn" @click="openUploadModal">
+    <!-- Action Buttons Row (Only visible after live snap feature is active) -->
+    <div v-if="isUploadActive" class="action-buttons-wrap font-sans">
+      <button
+        class="btn-primary snap-main-upload-btn"
+        @click="handleUploadButtonClick"
+      >
         <Camera :size="16" />
         <span>현장 사진 / 동영상 올리기</span>
       </button>
     </div>
 
-    <!-- Scrolling Masonry Wall (Always auto-scrolls when snaps exist; empty image boxes fill remaining slots) -->
-    <div v-if="visibleSnaps.length > 0">
-      <!-- Controls & Status Bar -->
-      <div class="scroll-status-bar font-sans">
+    <!-- Scrolling Masonry Wall -->
+    <div>
+      <!-- Controls & Status Bar (Visible when snaps are active) -->
+      <div v-if="isUploadActive" class="scroll-status-bar font-sans">
         <button class="scroll-pause-toggle" @click="togglePause">
           <Pause v-if="!isPaused" :size="12" />
           <Play v-else :size="12" />
@@ -244,7 +333,10 @@ function formatRelativeTime(isoString: string): string {
         <span class="tap-hint">사진을 누르면 크게 볼 수 있어요</span>
       </div>
 
-      <div class="auto-scroll-viewport font-sans">
+      <div
+        class="auto-scroll-viewport font-sans"
+        :class="{ 'is-interactive': isUploadActive }"
+      >
         <div class="masonry-columns-wrapper">
           <!-- Column 1 -->
           <div class="masonry-col">
@@ -253,41 +345,26 @@ function formatRelativeTime(isoString: string): string {
               :style="{ animationPlayState: isPaused ? 'paused' : 'running' }"
             >
               <template v-for="(item, idx) in col1Items" :key="'c1-' + item.id + '-' + idx">
-                <!-- Real Snap Card -->
                 <div
-                  v-if="!item.isPlaceholder && item.data"
+                  v-if="item.data"
                   class="snap-card"
-                  @click="selectedSnap = item.data"
+                  :style="{ aspectRatio: item.aspectRatio || '4/5' }"
+                  :class="{ 'is-interactive': isUploadActive && !item.isExample }"
+                  @click="handleSnapClick(item.data, item.isExample)"
                 >
                   <img
                     v-if="item.data.type === 'image'"
                     :src="item.data.url"
                     alt="현장 스냅"
-                    loading="lazy"
+                    decoding="async"
                     class="snap-img"
+                    :class="{ 'is-example-blur': isUploadActive && item.isExample }"
                   />
                   <div v-else class="snap-video-thumb">
                     <video :src="item.data.url" preload="metadata" playsinline muted></video>
                     <div class="play-badge">
                       <Play :size="15" class="play-icon" />
                     </div>
-                  </div>
-                </div>
-
-                <!-- Empty Image Box Placeholder Card -->
-                <div
-                  v-else
-                  class="snap-card placeholder-snap-card"
-                  @click="openUploadModal"
-                  title="터치하여 현장 사진/동영상 올리기"
-                >
-                  <div class="placeholder-inner">
-                    <div class="placeholder-icon-wrap">
-                      <Camera :size="22" class="placeholder-icon" />
-                      <span class="placeholder-plus">+</span>
-                    </div>
-                    <span class="placeholder-main-text">소중한 순간 담기</span>
-                    <span class="placeholder-sub-text">터치하여 사진 올리기</span>
                   </div>
                 </div>
               </template>
@@ -301,18 +378,20 @@ function formatRelativeTime(isoString: string): string {
               :style="{ animationPlayState: isPaused ? 'paused' : 'running' }"
             >
               <template v-for="(item, idx) in col2Items" :key="'c2-' + item.id + '-' + idx">
-                <!-- Real Snap Card -->
                 <div
-                  v-if="!item.isPlaceholder && item.data"
+                  v-if="item.data"
                   class="snap-card"
-                  @click="selectedSnap = item.data"
+                  :style="{ aspectRatio: item.aspectRatio || '4/5' }"
+                  :class="{ 'is-interactive': isUploadActive && !item.isExample }"
+                  @click="handleSnapClick(item.data, item.isExample)"
                 >
                   <img
                     v-if="item.data.type === 'image'"
                     :src="item.data.url"
                     alt="현장 스냅"
-                    loading="lazy"
+                    decoding="async"
                     class="snap-img"
+                    :class="{ 'is-example-blur': isUploadActive && item.isExample }"
                   />
                   <div v-else class="snap-video-thumb">
                     <video :src="item.data.url" preload="metadata" playsinline muted></video>
@@ -321,38 +400,42 @@ function formatRelativeTime(isoString: string): string {
                     </div>
                   </div>
                 </div>
-
-                <!-- Empty Image Box Placeholder Card -->
-                <div
-                  v-else
-                  class="snap-card placeholder-snap-card"
-                  @click="openUploadModal"
-                  title="터치하여 현장 사진/동영상 올리기"
-                >
-                  <div class="placeholder-inner">
-                    <div class="placeholder-icon-wrap">
-                      <Camera :size="22" class="placeholder-icon" />
-                      <span class="placeholder-plus">+</span>
-                    </div>
-                    <span class="placeholder-main-text">소중한 순간 담기</span>
-                    <span class="placeholder-sub-text">터치하여 사진 올리기</span>
-                  </div>
-                </div>
               </template>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Empty State (When no snaps exist yet) -->
-    <div v-else class="card-paper empty-snap-box font-sans">
-      <Camera :size="32" class="empty-icon" />
-      <p class="empty-text">아직 등록된 현장 스냅이 없습니다.<br>오늘의 첫 번째 사진/영상을 남겨보세요!</p>
-      <button class="btn-primary empty-btn" @click="openUploadModal">
-        <Camera :size="15" />
-        <span>첫 번째 사진 / 동영상 올리기</span>
-      </button>
+        <!-- Frosted Blurred Overlay covering the scrolling area before activation -->
+        <div v-if="!isUploadActive" class="snap-scroll-frosted-overlay">
+          <div class="frosted-overlay-card font-sans">
+            <div class="overlay-icon-box">
+              <Camera :size="28" class="overlay-camera-icon" />
+            </div>
+            <h3 class="overlay-main-text font-serif">
+              이 자리에 여러분들이<br />
+              찍어주신 사진을 올려주세요!
+            </h3>
+            <p class="overlay-sub-text font-sans">
+              예식 당일 여러분이 담아주신 소중한 순간들이<br />
+              이곳에 실시간으로 채워집니다.
+            </p>
+
+            <div class="overlay-btn-group font-sans">
+              <button
+                class="btn-primary overlay-action-btn font-sans"
+                :disabled="!isUploadActive"
+                @click="handleUploadButtonClick"
+              >
+                <Camera :size="15" />
+                <span>사진 / 동영상 올리기</span>
+              </button>
+              <span class="overlay-time-notice font-sans">
+                ※ 사진 및 영상 올리기는 예식 2시간 전부터 활성화됩니다
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Upload Modal -->
@@ -493,14 +576,14 @@ function formatRelativeTime(isoString: string): string {
 
     <!-- Upload Complete Notification Modal -->
     <Transition name="modal-fade">
-      <div v-if="isCompleteModalOpen" class="modal-backdrop" @click="isCompleteModalOpen = false">
+      <div v-if="isCompleteModalOpen" class="modal-backdrop" @click="handleCompleteConfirm">
         <div class="modal-content complete-modal font-sans" @click.stop>
           <div class="complete-icon-circle">
             <CheckCircle2 :size="36" class="complete-check-icon" />
           </div>
           <h3 class="complete-title font-serif">업로드가 완료되었습니다</h3>
           <p class="complete-desc">소중한 순간을 함께 공유해주셔서 진심으로 감사드립니다.</p>
-          <button class="btn-primary complete-btn font-sans" @click="isCompleteModalOpen = false">
+          <button class="btn-primary complete-btn font-sans" @click="handleCompleteConfirm">
             확인
           </button>
         </div>
@@ -570,6 +653,7 @@ function formatRelativeTime(isoString: string): string {
   box-shadow: 0 4px 14px rgba(168, 131, 80, 0.28);
 }
 
+
 /* Controls & Status Bar */
 .scroll-status-bar {
   display: flex;
@@ -612,23 +696,123 @@ function formatRelativeTime(isoString: string): string {
   height: 480px;
   max-height: 65vh;
   overflow: hidden;
-  border-radius: 18px;
-  background: var(--bg-subtle);
   margin-top: 6px;
   padding: 8px 4px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
-}
-
-.auto-scroll-viewport:hover .col-track,
-.auto-scroll-viewport:active .col-track {
-  animation-play-state: paused !important;
 }
 
 .masonry-columns-wrapper {
   display: flex;
   gap: 12px;
   height: 100%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+/* Floating Overlay over the scrolling area (Transparent wrapper so images are visible and scroll behind the card) */
+.snap-scroll-frosted-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 16px;
+  text-align: center;
+}
+
+.frosted-overlay-card {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 320px;
+  width: calc(100% - 24px);
+  padding: 24px 18px;
+  /* Frosted Glass: translucent white with backdrop blur so images scrolling behind are visible and softly blurred */
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 12px 36px rgba(45, 41, 38, 0.14),
+    0 2px 8px rgba(45, 41, 38, 0.06),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.95);
+}
+
+.overlay-icon-box {
+  width: 54px;
+  height: 54px;
+  border-radius: 9999px;
+  background: rgba(168, 131, 80, 0.1);
+  color: var(--gold-dark, #A88350);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.overlay-main-text {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-main, #2D2926);
+  letter-spacing: -0.3px;
+  margin-bottom: 8px;
+}
+
+.overlay-sub-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted, #79716B);
+  letter-spacing: -0.2px;
+  margin-bottom: 20px;
+}
+
+.overlay-btn-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.overlay-action-btn {
+  width: 100%;
+  max-width: 240px;
+  padding: 12px 20px;
+  font-size: 14px;
+}
+
+.overlay-action-btn:disabled,
+.snap-main-upload-btn:disabled {
+  background: #D8D2C9 !important;
+  color: #8C827A !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.overlay-time-notice {
+  font-size: 11.5px;
+  color: #8C827A;
+  letter-spacing: -0.2px;
+}
+
+.main-upload-time-guide {
+  font-size: 12px;
+  color: #8C827A;
+  text-align: center;
+  margin-top: 6px;
+  letter-spacing: -0.2px;
 }
 
 .masonry-col {
@@ -640,25 +824,29 @@ function formatRelativeTime(isoString: string): string {
 .col-track {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .col-track-1 {
-  animation: autoScrollUp 32s linear infinite;
+  animation: autoScrollUp 22s linear infinite;
 }
 
 .col-track-2 {
-  animation: autoScrollUp 38s linear infinite;
-  animation-delay: -6s;
+  animation: autoScrollUp 26s linear infinite;
+  animation-delay: -5s;
 }
 
 @keyframes autoScrollUp {
   0% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    transform: translateY(-50%);
+    transform: translate3d(0, -50%, 0);
   }
 }
 
@@ -708,39 +896,55 @@ function formatRelativeTime(isoString: string): string {
 /* Clean Images Only Card */
 .snap-card {
   width: 100%;
+  position: relative;
   border-radius: 12px;
   overflow: hidden;
-  background: #2D2926;
-  border: 1px solid var(--border-light);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: var(--bg-warm, #EFE7DA);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  cursor: default;
   flex-shrink: 0;
   display: block;
+  margin-bottom: 12px;
+  contain: layout paint;
 }
 
-.snap-card:hover {
+/* Hover & Interactive effects (Only active when isUploadActive) */
+.snap-card.is-interactive {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.snap-card.is-interactive:hover {
   transform: scale(1.02);
   box-shadow: var(--shadow-md);
 }
 
 .snap-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  min-height: 110px;
-  display: block;
+  height: 100%;
   object-fit: cover;
-  transition: opacity 0.2s ease;
+  display: block;
+  transition: opacity 0.2s ease, filter 0.3s ease, transform 0.3s ease;
 }
 
-.snap-card:hover .snap-img {
+.snap-img.is-example-blur {
+  filter: blur(2.5px) brightness(0.98);
+  -webkit-filter: blur(2.5px) brightness(0.98);
+  transform: scale(1.06);
+}
+
+.snap-card.is-interactive:hover .snap-img {
   opacity: 0.95;
 }
 
 .snap-video-thumb {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 4 / 5;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -771,90 +975,6 @@ function formatRelativeTime(isoString: string): string {
 .play-icon {
   margin-left: 2px;
   fill: currentColor;
-}
-
-/* Empty Image Box Placeholder Card */
-.placeholder-snap-card {
-  aspect-ratio: 3 / 4;
-  min-height: 170px;
-  background: linear-gradient(145deg, #FAF8F5, #F2EEE9);
-  border: 1.5px dashed #D6CEC5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.placeholder-snap-card:hover {
-  border-color: var(--gold-primary);
-  background: linear-gradient(145deg, #FFFDFB, #F7F3EE);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(168, 131, 80, 0.15);
-}
-
-.placeholder-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px 10px;
-  text-align: center;
-}
-
-.placeholder-icon-wrap {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #FFFFFF;
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-
-.placeholder-snap-card:hover .placeholder-icon-wrap {
-  transform: scale(1.08);
-  border-color: var(--gold-primary);
-}
-
-.placeholder-icon {
-  color: var(--gold-primary);
-}
-
-.placeholder-plus {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--gold-primary);
-  color: #FFFFFF;
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.placeholder-main-text {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-main);
-  letter-spacing: -0.2px;
-}
-
-.placeholder-sub-text {
-  font-size: 10px;
-  color: var(--text-muted);
-  line-height: 1.3;
 }
 
 /* Empty State */

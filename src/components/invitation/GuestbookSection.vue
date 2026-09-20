@@ -1,16 +1,39 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { guestbook, addGuestbookEntry, deleteGuestbookEntry } from '../../services/storage'
-import { Send, Trash2, Heart } from 'lucide-vue-next'
+import { Send, Trash2, Heart, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 const author = ref('')
 const password = ref('')
 const message = ref('')
 const isSubmitting = ref(false)
 
+const ITEMS_PER_PAGE = 3
+const currentPage = ref(1)
+
 const visibleGuestbook = computed(() => {
   return guestbook.value.filter(entry => !entry.isHidden)
 })
+
+const totalPages = computed(() => {
+  return Math.ceil(visibleGuestbook.value.length / ITEMS_PER_PAGE) || 1
+})
+
+const paginatedGuestbook = computed(() => {
+  const start = (currentPage.value - 1) * ITEMS_PER_PAGE
+  return visibleGuestbook.value.slice(start, start + ITEMS_PER_PAGE)
+})
+
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) {
+    currentPage.value = Math.max(1, newTotal)
+  }
+})
+
+const goToPage = (page: number) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+}
 
 const handleAddComment = () => {
   if (!author.value.trim() || !message.value.trim()) {
@@ -28,6 +51,7 @@ const handleAddComment = () => {
     author.value = ''
     password.value = ''
     message.value = ''
+    currentPage.value = 1
   } finally {
     isSubmitting.value = false
   }
@@ -105,7 +129,7 @@ const formatDate = (isoString: string) => {
 
     <!-- Messages List Feed -->
     <div class="guestbook-feed font-sans">
-      <div v-for="entry in visibleGuestbook" :key="entry.id" class="comment-card">
+      <div v-for="entry in paginatedGuestbook" :key="entry.id" class="comment-card">
         <div class="comment-header">
           <div class="author-wrap">
             <Heart :size="13" class="heart-icon" />
@@ -128,6 +152,42 @@ const formatDate = (isoString: string) => {
 
       <div v-if="visibleGuestbook.length === 0" class="empty-guestbook">
         <p>첫 번째 축하 메시지를 남겨주세요!</p>
+      </div>
+
+      <!-- Pagination Controls -->
+      <div v-if="totalPages > 1" class="pagination-wrap font-sans">
+        <button
+          type="button"
+          class="page-nav-btn"
+          :disabled="currentPage === 1"
+          @click="goToPage(currentPage - 1)"
+          aria-label="이전 페이지"
+        >
+          <ChevronLeft :size="16" />
+        </button>
+
+        <div class="page-numbers">
+          <button
+            v-for="p in totalPages"
+            :key="p"
+            type="button"
+            class="page-num-btn"
+            :class="{ active: p === currentPage }"
+            @click="goToPage(p)"
+          >
+            {{ p }}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="page-nav-btn"
+          :disabled="currentPage === totalPages"
+          @click="goToPage(currentPage + 1)"
+          aria-label="다음 페이지"
+        >
+          <ChevronRight :size="16" />
+        </button>
       </div>
     </div>
   </section>
@@ -251,6 +311,76 @@ const formatDate = (isoString: string) => {
   padding: 30px 0;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* Pagination */
+.pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 6px;
+}
+
+.page-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-ivory);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-nav-btn:hover:not(:disabled) {
+  border-color: var(--gold-primary);
+  color: var(--gold-dark);
+  background: #FFFFFF;
+}
+
+.page-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-num-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-num-btn:hover {
+  background: var(--bg-ivory);
+  color: var(--gold-dark);
+}
+
+.page-num-btn.active {
+  background: var(--gold-dark, #A88350);
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(168, 131, 80, 0.25);
 }
 </style>
 

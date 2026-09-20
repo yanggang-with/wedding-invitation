@@ -6,12 +6,25 @@ import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause } from 'lucide-v
 
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
+const isMoreLoading = ref(false)
 const INITIAL_COUNT = 9
 
 // --- Thumbnail Loading Delay Optimization ---
 const loadedThumbnails = ref<Record<string, boolean>>({})
 const onThumbnailLoad = (id: string) => {
   loadedThumbnails.value[id] = true
+}
+
+const toggleExpand = () => {
+  if (isExpanded.value) {
+    isExpanded.value = false
+  } else {
+    isMoreLoading.value = true
+    isExpanded.value = true
+    setTimeout(() => {
+      isMoreLoading.value = false
+    }, 550)
+  }
 }
 
 // --- Mobile Long-Press Peek Preview Popup ---
@@ -316,17 +329,19 @@ onUnmounted(() => {
         @touchcancel="handleThumbnailTouchEnd"
         @click="handleThumbnailClick(index)"
       >
-        <!-- Skeleton Placeholder while loading from Firebase -->
-        <div v-if="!loadedThumbnails[photo.id]" class="thumbnail-skeleton">
+        <!-- Skeleton Placeholder while loading from Firebase or More Loading -->
+        <div
+          v-if="!loadedThumbnails[photo.id] || (isMoreLoading && index >= INITIAL_COUNT)"
+          class="thumbnail-skeleton"
+        >
           <div class="skeleton-shimmer"></div>
-          <div class="skeleton-pulse-ring"></div>
         </div>
 
         <img
           :src="getOptimizedImageUrl(photo.url, 400, 75)"
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
-          :class="{ 'is-loaded': loadedThumbnails[photo.id] }"
+          :class="{ 'is-loaded': loadedThumbnails[photo.id] && (!isMoreLoading || index < INITIAL_COUNT) }"
           loading="lazy"
           decoding="async"
           @load="onThumbnailLoad(photo.id)"
@@ -336,9 +351,18 @@ onUnmounted(() => {
 
     <!-- Load More Button -->
     <div v-if="hasMorePhotos" class="gallery-more">
-      <button class="btn-secondary font-sans more-btn" @click="isExpanded = !isExpanded">
-        <span>{{ isExpanded ? '사진 접기' : `사진 더보기 (${remainingPhotosCount}장)` }}</span>
-        <ChevronDown :size="16" :class="{ 'rotate-180': isExpanded }" />
+      <button
+        class="btn-secondary font-sans more-btn"
+        :disabled="isMoreLoading"
+        @click="toggleExpand"
+      >
+        <template v-if="isMoreLoading">
+          <span class="more-loading-text">사진 불러오는 중...</span>
+        </template>
+        <template v-else>
+          <span>{{ isExpanded ? '사진 접기' : `사진 더보기 (${remainingPhotosCount}장)` }}</span>
+          <ChevronDown :size="16" :class="{ 'rotate-180': isExpanded }" />
+        </template>
       </button>
     </div>
 
@@ -551,31 +575,22 @@ onUnmounted(() => {
   background: linear-gradient(
     90deg,
     rgba(239, 231, 218, 0) 0%,
-    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.75) 50%,
     rgba(239, 231, 218, 0) 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-.skeleton-pulse-ring {
-  width: 22px;
-  height: 22px;
-  border: 2px solid rgba(168, 131, 80, 0.25);
-  border-top-color: var(--gold-primary);
-  border-radius: 50%;
-  animation: spin 0.85s linear infinite;
-  z-index: 2;
-  opacity: 0.85;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  animation: shimmer 1.4s infinite ease-in-out;
 }
 
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+.more-loading-text {
+  color: var(--gold-dark);
+  font-weight: 500;
+  letter-spacing: -0.2px;
 }
 
 .thumbnail-img {
@@ -635,6 +650,9 @@ onUnmounted(() => {
 .story-backdrop {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   background: rgba(10, 10, 10, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -664,6 +682,7 @@ onUnmounted(() => {
   width: 100%;
   max-width: 440px;
   height: 100vh;
+  height: 100dvh;
   max-height: 90vh;
   aspect-ratio: 9 / 16;
   background: #000000;
@@ -680,13 +699,39 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .story-backdrop {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
   .story-frame {
+    width: 100vw;
     max-width: 100vw;
     height: 100vh;
-    max-height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
     aspect-ratio: auto;
     box-shadow: none;
+  }
+
+  .story-progress-wrapper {
+    top: max(12px, env(safe-area-inset-top, 12px)) !important;
+    left: max(12px, env(safe-area-inset-left, 12px)) !important;
+    right: max(12px, env(safe-area-inset-right, 12px)) !important;
+  }
+
+  .story-header {
+    top: calc(max(12px, env(safe-area-inset-top, 12px)) + 14px) !important;
+    left: max(14px, env(safe-area-inset-left, 14px)) !important;
+    right: max(14px, env(safe-area-inset-right, 14px)) !important;
+  }
+
+  .story-caption-wrapper {
+    bottom: max(24px, calc(env(safe-area-inset-bottom, 24px) + 16px)) !important;
+    left: max(16px, env(safe-area-inset-left, 16px)) !important;
+    right: max(16px, env(safe-area-inset-right, 16px)) !important;
   }
 }
 
@@ -991,6 +1036,9 @@ onUnmounted(() => {
 .peek-modal-overlay {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   z-index: 1000;
   background: rgba(15, 13, 11, 0.72);
   backdrop-filter: blur(14px);
@@ -998,7 +1046,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 24px max(24px, env(safe-area-inset-right, 24px)) max(24px, env(safe-area-inset-bottom, 24px)) max(24px, env(safe-area-inset-left, 24px));
   pointer-events: none;
 }
 

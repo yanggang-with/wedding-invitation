@@ -1,78 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { weddingInfo, photos } from '../../services/storage'
-import { Share2, Link as LinkIcon, Check } from 'lucide-vue-next'
+import { weddingInfo } from '../../services/storage'
+import { Share2 } from 'lucide-vue-next'
 
-const linkCopied = ref(false)
+defineProps<{
+  isAtFooter?: boolean
+}>()
 
-const copyCurrentUrl = async () => {
-  try {
-    const url = window.location.href
-    await navigator.clipboard.writeText(url)
-    linkCopied.value = true
-    setTimeout(() => {
-      linkCopied.value = false
-    }, 2000)
-  } catch (err) {
-    console.error('Failed to copy URL:', err)
-  }
-}
-
-const shareKakao = () => {
-  const kakao = (window as any).Kakao
-  const currentUrl = window.location.href
-  const coverImg = photos.value.find(p => p.isCover)?.url || photos.value[0]?.url || ''
-  const title = `${weddingInfo.value.groom.name} ♥ ${weddingInfo.value.bride.name} 결혼합니다`
-  const description = `${weddingInfo.value.venue.name} ${weddingInfo.value.venue.hall}`
-
-  if (kakao && kakao.isInitialized && kakao.isInitialized()) {
-    kakao.Share.sendDefault({
-      objectType: 'feed',
-      content: {
-        title,
-        description,
-        imageUrl: coverImg,
-        link: {
-          mobileWebUrl: currentUrl,
-          webUrl: currentUrl
-        }
-      },
-      buttons: [
-        {
-          title: '모바일 청첩장 보기',
-          link: {
-            mobileWebUrl: currentUrl,
-            webUrl: currentUrl
-          }
-        }
-      ]
-    })
-  } else if (navigator.share) {
-    navigator.share({
-      title,
-      text: description,
-      url: currentUrl
-    }).catch(() => {})
-  } else {
-    copyCurrentUrl()
-    alert('청첩장 링크가 복사되었습니다. 카카오톡이나 메시지로 공유해 보세요!')
-  }
-}
+defineEmits<{
+  (e: 'share'): void
+}>()
 </script>
 
 <template>
   <footer class="share-footer font-sans">
-    <!-- Sharing Actions -->
-    <div class="share-actions">
-      <button class="share-btn kakao" @click="shareKakao">
-        <Share2 :size="16" />
-        <span>카카오톡 공유하기</span>
-      </button>
-
-      <button class="share-btn copy-link" @click="copyCurrentUrl">
-        <Check v-if="linkCopied" :size="16" class="text-green" />
-        <LinkIcon v-else :size="16" />
-        <span>{{ linkCopied ? '링크가 복사되었습니다' : '청첩장 링크 복사' }}</span>
+    <!-- Docked Share Button Target Slot -->
+    <div class="footer-share-destination">
+      <button
+        class="footer-docked-share-btn font-sans"
+        :class="{ 'is-active': isAtFooter }"
+        @click="$emit('share')"
+        aria-label="청첩장 공유하기"
+      >
+        <div class="docked-circle-icon">
+          <Share2 :size="20" class="docked-share-icon" />
+        </div>
+        <span class="docked-share-title font-sans">청첩장 공유하기</span>
+        <span class="docked-share-sub font-sans">카카오톡 또는 링크로 소중한 분들께 전해보세요</span>
       </button>
     </div>
 
@@ -88,74 +41,99 @@ const shareKakao = () => {
 
 <style scoped>
 .share-footer {
-  padding: 48px 24px 60px;
+  padding: 40px 24px 72px;
   background-color: var(--bg-ivory);
   border-top: 1px solid var(--border-light);
   text-align: center;
 }
 
-.share-actions {
+.footer-share-destination {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 36px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  min-height: 96px;
 }
 
-.share-btn {
-  width: 100%;
+.footer-docked-share-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 13px 0;
-  border-radius: 9999px;
-  font-size: 14px;
-  font-weight: 500;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  padding: 8px 16px;
+  border-radius: 16px;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.4s ease;
+  opacity: 0;
+  transform: translateY(24px) scale(0.9);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.share-btn.kakao {
-  background: #FEE500;
-  color: #191919;
-  border: 1px solid #E5CE00;
+.footer-docked-share-btn.is-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
-.share-btn.kakao:hover {
-  background: #FADA0A;
+.docked-circle-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 30px rgba(45, 41, 38, 0.12),
+              inset 0 1.5px 2px rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold-dark, #A88350);
+  transition: all 0.25s ease;
 }
 
-.share-btn.copy-link {
-  background: #FFFFFF;
+.footer-docked-share-btn:hover .docked-circle-icon {
+  transform: scale(1.08);
+  box-shadow: 0 12px 34px rgba(168, 131, 80, 0.22);
+}
+
+.footer-docked-share-btn:active .docked-circle-icon {
+  transform: scale(0.92);
+}
+
+.docked-share-title {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-main);
-  border: 1px solid var(--border-color);
+  letter-spacing: -0.3px;
+  margin-top: 2px;
 }
 
-.share-btn.copy-link:hover {
-  background: var(--bg-subtle);
-}
-
-.text-green {
-  color: #2E7D32;
+.docked-share-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: -0.2px;
 }
 
 .footer-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
+  border-top: 1px solid rgba(224, 214, 201, 0.5);
+  padding-top: 24px;
 }
 
 .blessing-text {
-  font-size: 17px;
-  color: var(--gold-dark);
+  font-size: 16px;
   letter-spacing: 2px;
+  color: var(--gold-dark);
+  margin-bottom: 6px;
 }
 
 .copyright {
   font-size: 11px;
   color: var(--text-muted);
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 </style>
-
