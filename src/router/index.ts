@@ -8,12 +8,14 @@ const router = createRouter({
     {
       path: '/',
       name: 'invitation',
-      component: InvitationView
+      component: InvitationView,
+      meta: { title: '소중한 분들을 초대합니다' }
     },
     {
       path: '/admin',
       name: 'admin',
-      component: AdminView
+      component: AdminView,
+      meta: { title: '청첩장 관리자 페이지' }
     },
     {
       path: '/:pathMatch(.*)*',
@@ -30,6 +32,15 @@ const router = createRouter({
     return { top: 0 }
   }
 })
+
+router.afterEach((to) => {
+  if (to.meta?.title) {
+    document.title = to.meta.title as string
+  } else {
+    document.title = '소중한 분들을 초대합니다'
+  }
+})
+
 
 export default router
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Home, Heart, Image, MapPin, MessageSquare, Share2 } from 'lucide-vue-next'
 import BgmPlayer from '../components/invitation/BgmPlayer.vue'
 import CoverSection from '../components/invitation/CoverSection.vue'
@@ -12,7 +12,7 @@ import RsvpSection from '../components/invitation/RsvpSection.vue'
 import GuestbookSection from '../components/invitation/GuestbookSection.vue'
 import LiveSnapSection from '../components/invitation/LiveSnapSection.vue'
 import ShareFooter from '../components/invitation/ShareFooter.vue'
-import { isStoryOpen, weddingInfo, photos } from '../services/storage'
+import { isStoryOpen, weddingInfo, photos, adminSettings } from '../services/storage'
 
 // --- Bottom Mini Navigation Bar ---
 const navItems = [
@@ -150,6 +150,10 @@ const scrollToSection = (targetEl: HTMLElement) => {
 let sectionObserver: IntersectionObserver | null = null
 
 const initSectionReveal = () => {
+  if (sectionObserver) {
+    sectionObserver.disconnect()
+    sectionObserver = null
+  }
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
   if (!sections.length) return
 
@@ -171,10 +175,27 @@ const initSectionReveal = () => {
 
   sections.forEach((sec, idx) => {
     if (idx > 0) {
+      // 이미 뷰포트에 들어와 있는 경우 즉시 is-visible 부여
+      const rect = sec.getBoundingClientRect()
+      if (rect.top < window.innerHeight * 0.8 && rect.bottom > 0) {
+        sec.classList.add('is-visible')
+      }
       sectionObserver?.observe(sec)
     }
   })
 }
+
+// 현장스냅 보이기/숨기기 실시간 변경 시 Observer 재등록 및 네비게이션 갱신
+watch(
+  () => adminSettings.value.showLiveSnapSection,
+  async () => {
+    await nextTick()
+    initSectionReveal()
+    updateCurrentSection()
+    checkFooterState()
+  }
+)
+
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll, { passive: true })
@@ -238,10 +259,15 @@ onUnmounted(() => {
       <GuestbookSection />
     </div>
 
-    <!-- 9. Live Snap Section (Always visible) -->
-    <div class="invitation-section-wrapper">
+    <!-- 9. Live Snap Section (Hidden when admin disables it) -->
+    <div
+      v-show="adminSettings.showLiveSnapSection !== false"
+      class="invitation-section-wrapper"
+      :class="{ 'is-visible': adminSettings.showLiveSnapSection !== false }"
+    >
       <LiveSnapSection />
     </div>
+
 
     <!-- 10. Share & Footer Section -->
     <div class="invitation-section-wrapper">

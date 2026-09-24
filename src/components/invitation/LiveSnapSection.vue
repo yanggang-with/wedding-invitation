@@ -63,55 +63,137 @@ const startPauseTimer = () => {
   }, PAUSE_DURATION)
 }
 
-const onTouchStart = () => {
+// --- Auto-scroll Delay & Overscroll Bounce State ---
+const isManuallyPaused = ref(false)
+let autoScrollResumeTimer: any = null
+
+const resumeAutoScrollAfterDelay = (delayMs = 5000) => {
+  if (autoScrollResumeTimer) clearTimeout(autoScrollResumeTimer)
+  autoScrollResumeTimer = setTimeout(() => {
+    // 사용자가 상단 버튼으로 직접 일시정지한 게 아니면 자동 스크롤 재개
+    if (!isManuallyPaused.value) {
+      isPaused.value = false
+      isUserInteracting.value = false
+      startAutoScroll()
+    }
+  }, delayMs)
+}
+
+// iOS Rubber-band Spring Bounce State
+const overscrollOffset = ref(0)
+const isOverscrolling = ref(false)
+let overscrollResetTimer: any = null
+
+const resetOverscroll = () => {
+  if (overscrollResetTimer) clearTimeout(overscrollResetTimer)
+  overscrollResetTimer = setTimeout(() => {
+    isOverscrolling.value = false
+    overscrollOffset.value = 0
+  }, 120)
+}
+
+let lastTouchY = 0
+
+const onTouchStart = (e: TouchEvent | MouseEvent) => {
   // 기능이 OFF일 때는 사용자의 내부 터치 스크롤 차단 (본문 스크롤로 통과)
   if (!isUploadActive.value) return
   isTouching = true
   isUserInteracting.value = true
   if (userTouchTimer) clearTimeout(userTouchTimer)
+  if ('touches' in e && e.touches.length > 0) {
+    lastTouchY = e.touches[0].clientY
+  }
 }
 
-const onTouchMove = () => {
+const onTouchMove = (e: TouchEvent) => {
   if (!isUploadActive.value) return
   isTouching = true
   isUserInteracting.value = true
   if (userTouchTimer) clearTimeout(userTouchTimer)
+
+  const el = scrollViewportRef.value
+  if (!el || !e.touches.length) return
+
+  const currentY = e.touches[0].clientY
+  const deltaY = currentY - lastTouchY
+  lastTouchY = currentY
+
+  const isAtTop = el.scrollTop <= 2
+  const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
+
+  // 맨 위에서 아래로 드래그 (더 위로 가려는 의도 -> iOS 스타일 탱글한 양수 오버스크롤)
+  if (isAtTop && deltaY > 0) {
+    isOverscrolling.value = true
+    overscrollOffset.value = Math.min(55, overscrollOffset.value + deltaY * 0.38)
+    triggerTopReachedIndicator()
+  }
+  // 맨 아래에서 위로 드래그 (더 아래로 가려는 의도 -> iOS 스타일 탱글한 음수 오버스크롤)
+  else if (isAtBottom && deltaY < 0) {
+    isOverscrolling.value = true
+    overscrollOffset.value = Math.max(-55, overscrollOffset.value + deltaY * 0.38)
+    triggerBottomReachedIndicator()
+  }
 }
 
 const onTouchEnd = () => {
   if (!isUploadActive.value) return
   isTouching = false
+  // 손을 떼는 순간 스프링 애니메이션으로 탱글하게 0 복귀
+  isOverscrolling.value = false
+  overscrollOffset.value = 0
   startPauseTimer()
 }
 
-const onWheel = () => {
+const onWheel = (e: WheelEvent) => {
   if (!isUploadActive.value) return
   isUserInteracting.value = true
   startPauseTimer()
+
+  const el = scrollViewportRef.value
+  if (!el) return
+
+  const isAtTop = el.scrollTop <= 2
+  const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
+
+  // 맨 처음에 도달한 상태에서 위로 스크롤 시도할 때 (탱글한 휠 바운스 효과)
+  if (isAtTop && e.deltaY < 0) {
+    isOverscrolling.value = true
+    overscrollOffset.value = Math.min(42, overscrollOffset.value + Math.abs(e.deltaY) * 0.22)
+    triggerTopReachedIndicator()
+    resetOverscroll()
+    window.scrollBy({ top: e.deltaY, behavior: 'auto' })
+  }
+  // 맨 끝에 도달한 상태에서 아래로 스크롤 시도할 때 (탱글한 휠 바운스 효과)
+  else if (isAtBottom && e.deltaY > 0) {
+    isOverscrolling.value = true
+    overscrollOffset.value = Math.max(-42, overscrollOffset.value - Math.abs(e.deltaY) * 0.22)
+    triggerBottomReachedIndicator()
+    resetOverscroll()
+    window.scrollBy({ top: e.deltaY, behavior: 'auto' })
+  }
 }
+
 
 const showTopReachedIndicator = ref(false)
 let topIndicatorTimer: any = null
 
 const triggerTopReachedIndicator = () => {
-  if (showTopReachedIndicator.value) return
   showTopReachedIndicator.value = true
   if (topIndicatorTimer) clearTimeout(topIndicatorTimer)
   topIndicatorTimer = setTimeout(() => {
     showTopReachedIndicator.value = false
-  }, 1400)
+  }, 1200)
 }
 
 const showBottomReachedIndicator = ref(false)
 let bottomIndicatorTimer: any = null
 
 const triggerBottomReachedIndicator = () => {
-  if (showBottomReachedIndicator.value) return
   showBottomReachedIndicator.value = true
   if (bottomIndicatorTimer) clearTimeout(bottomIndicatorTimer)
   bottomIndicatorTimer = setTimeout(() => {
     showBottomReachedIndicator.value = false
-  }, 1400)
+  }, 1200)
 }
 
 const onViewportScroll = () => {
@@ -142,6 +224,7 @@ const onViewportScroll = () => {
   }
 }
 
+
 const handleVideoLoaded = (e: Event) => {
   const video = e.target as HTMLVideoElement | null
   if (video) {
@@ -166,13 +249,25 @@ onMounted(() => {
   setTimeout(playAllPreviewVideos, 350)
 })
 
-// Section is always visible even before wedding ceremony
-const isVisible = computed(() => true)
+// Section visibility depends on adminSettings.showLiveSnapSection (default true)
+const isVisible = computed(() => adminSettings.value.showLiveSnapSection !== false)
+
+watch(isVisible, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      startAutoScroll()
+      setTimeout(playAllPreviewVideos, 350)
+    })
+  } else {
+    stopAutoScroll()
+  }
+})
 
 // Upload button active starting 2 hours before ceremony or if forceShow is enabled
 const isUploadActive = computed(() => {
   return isLiveSnapUploadActive(weddingInfo.value.date, adminSettings.value.forceShowLiveSnap)
 })
+
 
 
 // 실제 사용자가 업로드한 스냅 (더미 snap-1 등 제외)
@@ -214,7 +309,13 @@ const galleryExampleSnaps = computed<LiveSnapItem[]>(() => {
 const isPaused = ref(false)
 const togglePause = () => {
   isPaused.value = !isPaused.value
+  isManuallyPaused.value = isPaused.value
+  if (!isPaused.value) {
+    if (autoScrollResumeTimer) clearTimeout(autoScrollResumeTimer)
+    startAutoScroll()
+  }
 }
+
 
 interface StreamCardItem {
   id: string
@@ -366,24 +467,40 @@ function handleCompleteConfirm(isFromPopState: boolean | Event = false) {
   }, 120)
 }
 
-const handlePopState = () => {
-  if (selectedSnap.value) {
-    closeSnapLightbox(true)
-  } else if (isCompleteModalOpen.value) {
-    handleCompleteConfirm(true)
-  } else if (isUploadModalOpen.value) {
-    closeUploadModal(true)
-  }
-  if (typeof savedLiveSnapScrollY === 'number' && savedLiveSnapScrollY >= 0) {
+const restoreLiveSnapScrollPosition = () => {
+  if (typeof savedLiveSnapScrollY === 'number' && savedLiveSnapScrollY > 0) {
     window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
     requestAnimationFrame(() => {
       window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
       setTimeout(() => {
         window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
       }, 50)
+      setTimeout(() => {
+        window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
+      }, 150)
     })
   }
 }
+
+const handlePopState = () => {
+  const isSnapActive = Boolean(selectedSnap.value)
+  const isCompleteActive = Boolean(isCompleteModalOpen.value)
+  const isUploadActiveModal = Boolean(isUploadModalOpen.value)
+
+  // 오직 현장스냅의 모달이 열려 있는 상태에서 발생한 뒤로가기인 경우에만 처리
+  if (!isSnapActive && !isCompleteActive && !isUploadActiveModal) {
+    return
+  }
+
+  if (isSnapActive) {
+    closeSnapLightbox(true)
+  } else if (isCompleteActive) {
+    handleCompleteConfirm(true)
+  } else if (isUploadActiveModal) {
+    closeUploadModal(true)
+  }
+}
+
 
 const handleImageError = (e: Event, id?: string) => {
   if (id) {
@@ -427,7 +544,11 @@ function openSnapLightbox(snap: LiveSnapItem) {
         const playPromise = lightboxVideoRef.value.play()
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
-            console.log('Video play catch:', err)
+            console.log('Video audio play blocked by browser policy, trying muted:', err)
+            if (lightboxVideoRef.value) {
+              lightboxVideoRef.value.muted = true
+              lightboxVideoRef.value.play().catch(e => console.warn('Muted video play failed:', e))
+            }
           })
         }
       }
@@ -448,15 +569,10 @@ function closeSnapLightbox(isFromPopState: boolean | Event = false) {
     history.back()
     setTimeout(() => { isNavigatingBack = false }, 300)
   }
-  if (typeof savedLiveSnapScrollY === 'number' && savedLiveSnapScrollY >= 0) {
-    window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
-      setTimeout(() => {
-        window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
-      }, 50)
-    })
-  }
+  restoreLiveSnapScrollPosition()
+
+  // 컨텐츠의 레이어 팝업이 닫히면 5초 뒤 자동 스크롤 활성화
+  resumeAutoScrollAfterDelay(5000)
 }
 
 // Hide navigation menu & prevent body scrolling when any lightbox or modal is active
@@ -473,18 +589,22 @@ onUnmounted(() => {
   stopAutoScroll()
   if (topIndicatorTimer) clearTimeout(topIndicatorTimer)
   if (bottomIndicatorTimer) clearTimeout(bottomIndicatorTimer)
+  if (autoScrollResumeTimer) clearTimeout(autoScrollResumeTimer)
+  if (overscrollResetTimer) clearTimeout(overscrollResetTimer)
 })
 
 function handleSnapClick(snap?: LiveSnapItem, _isExample?: boolean) {
   if (!snap) return
-  // 클릭 시 자동 스크롤 일시정지
+  // 각각의 컨텐츠를 클릭할 때 자동 스크롤 멈춤
   isPaused.value = true
+  if (autoScrollResumeTimer) clearTimeout(autoScrollResumeTimer)
   // 비디오 파일인 경우 항상 라이트박스로 재생 시청 가능
   // 일반 사진/일러스트인 경우 현장 스냅 기능이 ON일 때 라이트박스 열림
   if (snap.type === 'video' || isUploadActive.value) {
     openSnapLightbox(snap)
   }
 }
+
 
 function handleUploadButtonClick() {
   if (!isUploadActive.value) {
@@ -512,12 +632,9 @@ function closeUploadModal(isFromPopState: boolean | Event = false) {
     history.back()
     setTimeout(() => { isNavigatingBack = false }, 300)
   }
-  if (savedLiveSnapScrollY > 0) {
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: savedLiveSnapScrollY, behavior: 'instant' })
-    })
-  }
+  restoreLiveSnapScrollPosition()
 }
+
 
 function resetForm() {
   selectedFile.value = null
@@ -618,7 +735,7 @@ function formatRelativeTime(isoString: string): string {
 </script>
 
 <template>
-  <section v-if="isVisible" class="invitation-section livesnap-section">
+  <section class="invitation-section livesnap-section">
     <div class="section-divider">
       <span class="section-label">LIVE SNAP</span>
     </div>
@@ -673,7 +790,13 @@ function formatRelativeTime(isoString: string): string {
           @wheel.passive="onWheel"
           @scroll.passive="onViewportScroll"
         >
-          <div class="masonry-columns-wrapper">
+          <div
+            class="masonry-columns-wrapper"
+            :class="{ 'is-spring-back': !isOverscrolling }"
+            :style="{
+              transform: overscrollOffset !== 0 ? `translate3d(0, ${overscrollOffset}px, 0)` : undefined
+            }"
+          >
             <!-- Column 1 -->
             <div class="masonry-col">
               <div class="col-track col-track-1">
@@ -1140,7 +1263,7 @@ function formatRelativeTime(isoString: string): string {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
   margin-top: 6px;
@@ -1162,10 +1285,15 @@ function formatRelativeTime(isoString: string): string {
   display: flex;
   gap: 12px;
   min-height: 100%;
-  /* 상단 페이드아웃(서서히 흐려지는 디자인) 제거, 하단만 부드럽게 흐려짐 */
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 92%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 92%, transparent 100%);
+  will-change: transform;
 }
+
+/* iOS Rubber-band Spring Bounce Animation */
+.masonry-columns-wrapper.is-spring-back {
+  transition: transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+
 
 /* Top & Bottom Reached Scroll Boundary Indicators (No text badge, clean gold mark) */
 .top-reached-indicator-wrap {

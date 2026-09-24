@@ -16,16 +16,17 @@
     "canvas-confetti": "^1.9.4",
     "firebase": "^12.18.0",
     "lucide-vue-next": "^1.0.0",
+    "vscode-notify-desktop": "^0.2.1",
     "vue": "^3.5.41",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitejs/plugin-vue": "^5.2.4",
     "@vue/tsconfig": "^0.9.1",
     "gh-pages": "^6.3.0",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2",
+    "vite": "^6.2.7",
     "vue-tsc": "^3.3.11"
   }
 }

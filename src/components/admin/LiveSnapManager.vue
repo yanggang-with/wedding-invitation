@@ -30,6 +30,7 @@ import {
 } from 'lucide-vue-next'
 import { uploadToGoogleDrive } from '../../services/storage'
 
+const showSection = ref(adminSettings.value.showLiveSnapSection !== false)
 const forceShow = ref(!!adminSettings.value.forceShowLiveSnap)
 const googleDriveScriptUrl = ref(adminSettings.value.googleDriveScriptUrl || '')
 const googleDriveFolderId = ref(adminSettings.value.googleDriveFolderId || '')
@@ -123,6 +124,7 @@ async function testDriveUpload() {
 function saveSettings() {
   adminSettings.value = {
     ...adminSettings.value,
+    showLiveSnapSection: showSection.value,
     forceShowLiveSnap: forceShow.value,
     googleDriveScriptUrl: googleDriveScriptUrl.value.trim(),
     googleDriveFolderId: googleDriveFolderId.value.trim()
@@ -164,7 +166,40 @@ function handleDelete(id: string) {
         <h4 class="card-title font-serif">현장 스냅 노출 및 테스트 모드</h4>
       </div>
 
-      <!-- Wedding Date Status Banner with Test Mode Switch on Right End -->
+      <!-- 1) Section Visibility (Show/Hide) Switch -->
+      <div class="status-banner" :class="showSection ? 'is-active' : 'is-pending'">
+        <div class="banner-left">
+          <Eye v-if="showSection" :size="18" class="banner-icon" />
+          <EyeOff v-else :size="18" class="banner-icon" />
+          <div class="banner-text">
+            <p class="banner-title">
+              청첩장 현장스냅 섹션: <strong>{{ showSection ? '보이기 (노출)' : '숨기기 (비활성화)' }}</strong>
+            </p>
+            <p class="banner-desc">
+              {{ showSection ? '하객들이 청첩장에서 현장스냅 섹션과 업로드 기능을 볼 수 있습니다.' : '청첩장에서 현장스냅 섹션이 완전히 숨겨집니다.' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="banner-right">
+          <div class="test-label-group">
+            <span class="test-title">기능 노출</span>
+            <span class="test-badge" :class="{ on: showSection }">
+              {{ showSection ? 'ON' : 'OFF' }}
+            </span>
+          </div>
+          <label class="switch">
+            <input
+              v-model="showSection"
+              type="checkbox"
+              @change="saveSettings"
+            />
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 2) Wedding Date Status Banner with Test Mode Switch on Right End -->
       <div
         class="status-banner"
         :class="isWeddingDayOrLater(weddingInfo.date, forceShow) ? 'is-active' : 'is-pending'"

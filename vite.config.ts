@@ -32,5 +32,8 @@ export default defineConfig({
         }
       }
     }
+  },
+  server: {
+    allowedHosts: ['zen-cover-neuron.ngrok-free.dev'],
   }
 })

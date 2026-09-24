@@ -22,11 +22,19 @@ import {
   deleteObject,
   type FirebaseStorage
 } from 'firebase/storage'
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  type Auth
+} from 'firebase/auth'
 import type { FirebaseConfigSetting, PhotoItem, WeddingInfo, AccountItem, RsvpItem, GuestbookItem, LiveSnapItem } from '../types/wedding'
 
 let app: FirebaseApp | null = null
 let db: Firestore | null = null
 let storage: FirebaseStorage | null = null
+let auth: Auth | null = null
 
 // Vite 환경 변수(VITE_FIREBASE_*)에서 설정 가져오기
 export function getEnvFirebaseConfig(): FirebaseConfigSetting | null {
@@ -62,13 +70,14 @@ export function initFirebase(config?: FirebaseConfigSetting) {
     }
     db = getFirestore(app)
     storage = getStorage(app)
+    auth = getAuth(app)
     // 10분의 기본 재시도 대기를 15초로 단축하여 무한 대기 현상 방지
     storage.maxUploadRetryTime = 15000
     storage.maxOperationRetryTime = 15000
-    return { app, db, storage }
+    return { app, db, storage, auth }
   } catch (err) {
     console.warn('Firebase initialization error:', err)
-    return { app: null, db: null, storage: null }
+    return { app: null, db: null, storage: null, auth: null }
   }
 }
 
@@ -444,6 +453,29 @@ export async function checkFirestoreStatus(): Promise<{ ok: boolean; message: st
       }
     }
     return { ok: false, message: `Firestore 연결 오류: ${err.message || err}` }
+  }
+}
+
+export async function signInWithGoogle(): Promise<{ email: string; displayName: string }> {
+  if (!auth) {
+    initFirebase()
+    if (!auth) {
+      throw new Error('Firebase 설정이 완료되지 않았습니다. 관리자 비밀번호로 먼저 로그인하여 Firebase 설정을 등록해주세요.')
+    }
+  }
+  const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+  const result = await signInWithPopup(auth, provider)
+  const user = result.user
+  return {
+    email: user.email || '',
+    displayName: user.displayName || user.email || '인증된 사용자'
+  }
+}
+
+export async function signOutGoogle(): Promise<void> {
+  if (auth) {
+    await signOut(auth)
   }
 }
 

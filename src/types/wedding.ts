@@ -1,6 +1,7 @@
 export interface PhotoItem {
   id: string
   url: string
+  thumbnailUrl?: string
   caption?: string
   isCover?: boolean
   isHidden?: boolean
@@ -50,7 +51,9 @@ export interface WeddingInfo {
   bgmTitle: string
   bgmAutoPlay: boolean
   kakaoApiKey?: string
+  naverMapClientId?: string
 }
+
 
 export interface AccountItem {
   id: string
@@ -110,7 +113,11 @@ export interface AdminSettings {
   firebaseConfig?: FirebaseConfigSetting
   useFirebase: boolean
   forceShowLiveSnap?: boolean
+  showLiveSnapSection?: boolean
   googleDriveScriptUrl?: string
   googleDriveFolderId?: string
   useGoogleDriveStorage?: boolean
+  allowedGoogleEmails?: string[]
+  naverMapClientId?: string
 }
+

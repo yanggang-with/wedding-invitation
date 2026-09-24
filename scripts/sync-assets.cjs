@@ -18,8 +18,27 @@ if (fs.existsSync(distAssets)) {
   }
 }
 
-// 2. Copy root index.html to dist/index.html (for GitHub Actions dist artifact deployment)
-if (fs.existsSync(path.join(rootDir, 'index.html'))) {
-  fs.copyFileSync(path.join(rootDir, 'index.html'), path.join(distDir, 'index.html'))
-  console.log('Synced index.html to dist/index.html')
+// 2. Copy and transform root index.html to dist/index.html (substituting %VITE_...% env variables)
+const indexHtmlPath = path.join(rootDir, 'index.html')
+if (fs.existsSync(indexHtmlPath)) {
+  let htmlContent = fs.readFileSync(indexHtmlPath, 'utf8')
+
+  // Parse .env if present
+  let naverKey = process.env.VITE_APP_NAVERMAP_KEY || ''
+  const envPath = path.join(rootDir, '.env')
+  if (fs.existsSync(envPath)) {
+    const envLines = fs.readFileSync(envPath, 'utf8').split('\n')
+    for (const line of envLines) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('VITE_APP_NAVERMAP_KEY=')) {
+        naverKey = trimmed.replace('VITE_APP_NAVERMAP_KEY=', '').trim()
+        break
+      }
+    }
+  }
+
+  htmlContent = htmlContent.replace(/%VITE_APP_NAVERMAP_KEY%/g, naverKey)
+  fs.writeFileSync(path.join(distDir, 'index.html'), htmlContent, 'utf8')
+  console.log('Synced and transformed index.html to dist/index.html')
 }
+

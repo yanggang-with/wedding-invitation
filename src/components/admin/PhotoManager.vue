@@ -10,7 +10,8 @@ import {
   reorderPhotos,
   togglePhotoVisibility,
   syncPhotosFromFirebaseStorage,
-  adminSettings
+  adminSettings,
+  getOptimizedImageUrl
 } from '../../services/storage'
 import {
   isFirebaseStorageReady,
@@ -289,17 +290,22 @@ let cleanupMouseMove: (() => void) | null = null
 const handleMouseDown = (index: number, e: MouseEvent) => {
   if (e.button !== 0) return
   const target = e.target as HTMLElement
-  if (target?.closest('button, input, textarea, a')) return
+  if (target?.closest('button, input, textarea, a, .overlay-btn')) return
+
+  // 브라우저 기본 이미지 드래그 및 텍스트 선택 딜레이 즉각 방지
+  e.preventDefault()
 
   const startX = e.clientX
   const startY = e.clientY
   let hasMoved = false
+  dragPosition.value = { x: startX, y: startY }
 
   const onMouseMove = (moveEvent: MouseEvent) => {
     const dx = moveEvent.clientX - startX
     const dy = moveEvent.clientY - startY
-    // 4px 이상 이동했을 때만 드래그 시작 (단순 클릭과 드래그 구분)
-    if (!hasMoved && Math.hypot(dx, dy) < 4) {
+
+    // 2px만 이동해도 지연 없이 즉각 드래그 발동
+    if (!hasMoved && Math.hypot(dx, dy) < 2) {
       return
     }
     if (!hasMoved) {
@@ -398,6 +404,8 @@ const handleTouchCancel = () => {
 
 const handleTouchStart = (index: number, e: TouchEvent) => {
   if (e.touches.length !== 1) return
+  const target = e.target as HTMLElement
+  if (target?.closest('button, input, textarea, a, .overlay-btn')) return
   const touch = e.touches[0]
   dragSourceIndex.value = index
   dragTargetIndex.value = index
@@ -560,7 +568,11 @@ onUnmounted(() => {
         </div>
 
         <!-- Drag Handle & Badges -->
-        <div class="photo-thumb-wrap">
+        <div
+          class="photo-thumb-wrap"
+          @mousedown="handleMouseDown(index, $event)"
+          @touchstart="handleTouchStart(index, $event)"
+        >
           <!-- Skeleton Shimmer Loader while photo loads from Firebase -->
           <div v-if="!loadedAdminThumbs[photo.id]" class="admin-thumb-skeleton">
             <div class="admin-skeleton-shimmer"></div>
@@ -695,7 +707,7 @@ onUnmounted(() => {
     >
       <div class="ghost-thumb-wrap">
         <img
-          :src="sortedPhotos[dragSourceIndex].url"
+          :src="sortedPhotos[dragSourceIndex].thumbnailUrl || getOptimizedImageUrl(sortedPhotos[dragSourceIndex].url, 150, 60)"
           class="ghost-thumb-img"
           alt=""
         />
@@ -1136,6 +1148,14 @@ onUnmounted(() => {
   aspect-ratio: 1 / 1;
   background: var(--bg-warm);
   overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.photo-thumb-wrap:active {
+  cursor: grabbing;
 }
 
 .admin-thumb-skeleton {
@@ -1270,7 +1290,13 @@ onUnmounted(() => {
   gap: 8px;
   transition: opacity 0.2s;
   z-index: 3;
+  cursor: grab;
 }
+
+.thumb-overlay:active {
+  cursor: grabbing;
+}
+
 
 .photo-card:hover .thumb-overlay {
   opacity: 1;

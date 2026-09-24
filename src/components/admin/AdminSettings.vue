@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import {
   adminSettings,
+  weddingInfo,
   resetToSampleData,
   isCloudSyncing,
   lastCloudSyncTime,
@@ -21,8 +22,15 @@ import {
   UploadCloud,
   DownloadCloud,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck,
+  Plus,
+  Trash2,
+  Mail,
+  MapPin,
+  ExternalLink
 } from 'lucide-vue-next'
+
 
 if (!adminSettings.value.firebaseConfig) {
   adminSettings.value.firebaseConfig = {
@@ -69,6 +77,36 @@ const handleUpdatePin = () => {
   currentPin.value = ''
   newPin.value = ''
   newPinConfirm.value = ''
+}
+
+// Google Authentication Management
+const newGoogleEmail = ref('')
+const googleEmailMsg = ref('')
+
+const addGoogleEmail = () => {
+  googleEmailMsg.value = ''
+  const email = newGoogleEmail.value.toLowerCase().trim()
+  if (!email || !email.includes('@')) {
+    googleEmailMsg.value = '올바른 이메일 주소를 입력해주세요.'
+    return
+  }
+  if (!adminSettings.value.allowedGoogleEmails) {
+    adminSettings.value.allowedGoogleEmails = []
+  }
+  if (adminSettings.value.allowedGoogleEmails.includes(email)) {
+    googleEmailMsg.value = '이미 등록된 이메일입니다.'
+    return
+  }
+  adminSettings.value.allowedGoogleEmails.push(email)
+  newGoogleEmail.value = ''
+  googleEmailMsg.value = `'${email}' 계정이 성공적으로 추가되었습니다.`
+  setTimeout(() => { googleEmailMsg.value = '' }, 2500)
+}
+
+const removeGoogleEmail = (index: number) => {
+  if (adminSettings.value.allowedGoogleEmails) {
+    adminSettings.value.allowedGoogleEmails.splice(index, 1)
+  }
 }
 
 const handleSaveFirebase = () => {
@@ -127,7 +165,22 @@ const handleResetSample = () => {
     alert('기본 샘플 데이터로 복원되었습니다.')
   }
 }
+
+// Naver Maps API Key Management
+const naverMapSavedMsg = ref(false)
+const handleSaveNaverKey = () => {
+  try {
+    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+    naverMapSavedMsg.value = true
+    setTimeout(() => {
+      naverMapSavedMsg.value = false
+    }, 2500)
+  } catch (err) {
+    console.error('Failed to save naver map key:', err)
+  }
+}
 </script>
+
 
 <template>
   <div class="admin-settings font-sans">
@@ -187,7 +240,66 @@ const handleResetSample = () => {
         </form>
       </div>
 
-      <!-- 2. Firebase Cloud Integration -->
+      <!-- 2. Google Authentication Accounts Integration -->
+      <div class="card-paper block-card">
+        <div class="block-title-row">
+          <ShieldCheck :size="18" class="block-icon gold" />
+          <h4 class="block-title font-serif">인증된 Google 관리자 계정</h4>
+        </div>
+
+        <p class="block-desc">
+          비밀번호 입력 없이 <strong>Google 계정으로 원클릭 로그인</strong>할 수 있는 신랑/신부님의 Google 이메일을 등록합니다.
+          등록된 계정으로만 관리자 로그인이 허용됩니다.
+        </p>
+
+        <!-- Add Email Form -->
+        <div class="google-email-input-row">
+          <div class="input-with-icon">
+            <Mail :size="16" class="field-icon" />
+            <input
+              v-model="newGoogleEmail"
+              type="email"
+              placeholder="예: wedding@gmail.com"
+              class="input-field email-field"
+              @keyup.enter="addGoogleEmail"
+            />
+          </div>
+          <button type="button" class="btn-primary add-email-btn" @click="addGoogleEmail">
+            <Plus :size="15" />
+            <span>이메일 추가</span>
+          </button>
+        </div>
+
+        <p v-if="googleEmailMsg" class="success-msg">{{ googleEmailMsg }}</p>
+
+        <!-- Allowed Emails Tag List -->
+        <div class="allowed-emails-wrap">
+          <label class="form-label">등록된 Google 관리자 계정 ({{ (adminSettings.allowedGoogleEmails || []).length }}개)</label>
+          <div v-if="(adminSettings.allowedGoogleEmails || []).length > 0" class="email-tags-list">
+            <div
+              v-for="(email, idx) in adminSettings.allowedGoogleEmails"
+              :key="email"
+              class="email-tag font-sans"
+            >
+              <Mail :size="13" class="tag-icon" />
+              <span class="tag-text">{{ email }}</span>
+              <button
+                type="button"
+                class="tag-del-btn"
+                @click="removeGoogleEmail(idx)"
+                title="삭제"
+              >
+                <Trash2 :size="12" />
+              </button>
+            </div>
+          </div>
+          <div v-else class="empty-email-hint">
+            <span>아직 등록된 Google 계정이 없습니다. 이메일을 추가하시면 해당 계정으로 비밀번호 없이 즉시 로그인할 수 있습니다.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Firebase Cloud Integration -->
       <div class="card-paper block-card">
         <div class="block-title-row">
           <Cloud :size="18" class="block-icon" />
@@ -307,8 +419,54 @@ const handleResetSample = () => {
         </div>
       </div>
 
-      <!-- 3. Reset Factory Sample Data -->
+      <!-- 3. Naver Maps OpenAPI Key -->
+      <div class="card-paper block-card">
+        <div class="block-title-row">
+          <MapPin :size="18" class="block-icon naver-green" />
+          <h4 class="block-title font-serif">네이버 지도 OpenAPI 설정</h4>
+        </div>
+
+        <p class="block-desc">
+          오시는 길(LOCATION) 섹션에 표시될 네이버 지도 Client ID를 설정합니다.
+          별도의 재배포 없이 키를 입력하고 저장하면 청첩장에 네이버 지도가 실시간 연동됩니다.
+        </p>
+
+        <div class="form-group">
+          <div class="label-with-action">
+            <label class="form-label">Client ID (API Key)</label>
+            <a
+              href="https://www.ncloud.com/product/applicationService/maps"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ext-link-btn"
+            >
+              <span>NCP 콘솔 열기</span>
+              <ExternalLink :size="12" />
+            </a>
+          </div>
+          <input
+            v-model="weddingInfo.naverMapClientId"
+            type="text"
+            placeholder="예: ncpClientId 값 입력 (예: ab12cd34ef)"
+            class="input-field font-mono"
+          />
+          <p class="field-hint">
+            * <a href="https://www.ncloud.com/product/applicationService/maps" target="_blank" rel="noopener noreferrer" class="text-link">네이버 클라우드 플랫폼(NCP)</a>에서 <code>Web Dynamic Map</code> 서비스를 신청하고 발급받은 Client ID를 입력하세요.
+          </p>
+        </div>
+
+        <div class="save-row">
+          <button class="btn-primary sub-btn" @click="handleSaveNaverKey">
+            <Check v-if="naverMapSavedMsg" :size="15" />
+            <Save v-else :size="15" />
+            <span>{{ naverMapSavedMsg ? '네이버 지도 키 저장 완료!' : '네이버 지도 키 저장' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Reset Factory Sample Data -->
       <div class="card-paper block-card danger-zone">
+
         <div class="block-title-row">
           <RotateCcw :size="18" class="block-icon danger" />
           <h4 class="block-title font-serif">기본 샘플 데이터로 복원</h4>
@@ -371,6 +529,48 @@ const handleResetSample = () => {
 .block-icon.danger {
   color: var(--rose-accent);
 }
+
+.block-icon.naver-green {
+  color: #03C75A;
+}
+
+.label-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.ext-link-btn {
+  font-size: 11.5px;
+  color: #03C75A;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(3, 199, 90, 0.08);
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.ext-link-btn:hover {
+  background: #03C75A;
+  color: #FFFFFF;
+}
+
+.text-link {
+  color: #03C75A;
+  text-decoration: underline;
+}
+
+.save-row {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 
 .block-title {
   font-size: 16px;
@@ -688,5 +888,101 @@ input:checked + .slider:before {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* Google Auth Account Styling */
+.block-icon.gold {
+  color: var(--gold-primary, #A88350);
+}
+
+.google-email-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.input-with-icon {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.field-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.email-field {
+  padding-left: 36px;
+}
+
+.add-email-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 10px 18px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.allowed-emails-wrap {
+  margin-top: 16px;
+}
+
+.email-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.email-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-warm, #EFE7DA);
+  border: 1px solid rgba(168, 131, 80, 0.35);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.tag-icon {
+  color: var(--gold-dark, #8C6D41);
+}
+
+.tag-text {
+  font-weight: 500;
+}
+
+.tag-del-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.tag-del-btn:hover {
+  color: #C5221F;
+  background: rgba(197, 34, 31, 0.1);
+}
+
+.empty-email-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.5;
 }
 </style>

@@ -116,8 +116,10 @@ export const DEFAULT_WEDDING_INFO: WeddingInfo = {
   bgmUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=romantic-piano-112199.mp3',
   bgmTitle: 'Romantic Piano Wedding Melody',
   bgmAutoPlay: false,
-  kakaoApiKey: ''
+  kakaoApiKey: '',
+  naverMapClientId: ''
 }
+
 
 export const DEFAULT_ACCOUNTS: AccountItem[] = [
   {
@@ -184,9 +186,13 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   adminPin: 'yyjkjw0809',
   useFirebase: false,
   forceShowLiveSnap: false,
+  showLiveSnapSection: true,
   googleDriveScriptUrl: '',
-  googleDriveFolderId: ''
+  googleDriveFolderId: '',
+  allowedGoogleEmails: [],
+  naverMapClientId: ''
 }
+
 
 export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   {

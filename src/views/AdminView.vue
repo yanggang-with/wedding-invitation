@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import AdminLogin from '../components/admin/AdminLogin.vue'
 import PhotoManager from '../components/admin/PhotoManager.vue'
 import InfoEditor from '../components/admin/InfoEditor.vue'
@@ -57,6 +57,16 @@ function clearSession() {
 
 const isAuthenticated = ref(checkSession())
 const activeTab = ref<'photos' | 'info' | 'accounts' | 'rsvp' | 'guestbook' | 'livesnap' | 'settings'>('photos')
+
+let originalTitle = document.title
+onMounted(() => {
+  originalTitle = document.title
+  document.title = '청첩장 관리자 페이지'
+})
+
+onUnmounted(() => {
+  document.title = originalTitle || '소중한 분들을 초대합니다'
+})
 
 const handleLoginSuccess = () => {
   updateSession()

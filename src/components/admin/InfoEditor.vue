@@ -1,7 +1,22 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { weddingInfo, formatWeddingDate } from '../../services/storage'
-import { Save, Check, Calendar, Eye } from 'lucide-vue-next'
+import { formatPhoneNumber } from '../../utils/format'
+import { Save, Check, Calendar, Eye, MapPin, ExternalLink } from 'lucide-vue-next'
+
+
+const handlePhoneInput = (field: 'groom' | 'bride' | 'venue', e: Event) => {
+  const target = e.target as HTMLInputElement
+  const formatted = formatPhoneNumber(target.value)
+  if (field === 'groom') {
+    weddingInfo.value.groom.phone = formatted
+  } else if (field === 'bride') {
+    weddingInfo.value.bride.phone = formatted
+  } else if (field === 'venue') {
+    weddingInfo.value.venue.tel = formatted
+  }
+  target.value = formatted
+}
 
 const savedNotice = ref(false)
 const isDirty = ref(false)
@@ -168,15 +183,16 @@ const handleSave = () => {
             />
           </div>
 
-          <div class="form-group">
-            <label class="form-label">예식장 대표 번호</label>
-            <input
-              v-model="weddingInfo.venue.tel"
-              type="text"
-              placeholder="예: 02-555-1234"
-              class="input-field"
-            />
-          </div>
+            <div class="form-group">
+              <label class="form-label">예식장 대표 번호</label>
+              <input
+                v-model="weddingInfo.venue.tel"
+                type="text"
+                placeholder="예: 02-555-1234"
+                class="input-field"
+                @input="handlePhoneInput('venue', $event)"
+              />
+            </div>
 
           <div class="form-group">
             <label class="form-label">위도 (Latitude)</label>
@@ -197,6 +213,37 @@ const handleSave = () => {
               class="input-field"
             />
           </div>
+
+          <!-- Naver Map OpenAPI Key -->
+          <div class="form-group full naver-map-key-box">
+            <div class="label-with-badge">
+              <label class="form-label mb-0">
+                <MapPin :size="13" class="inline-icon" />
+                <span>네이버 지도 Client ID (API Key)</span>
+              </label>
+              <a
+                href="https://www.ncloud.com/product/applicationService/maps"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ncp-link-btn"
+                title="네이버 클라우드 플랫폼 Maps 콘솔 열기"
+              >
+                <span>NCP 콘솔 발급</span>
+                <ExternalLink :size="11" />
+              </a>
+
+            </div>
+            <input
+              v-model="weddingInfo.naverMapClientId"
+              type="text"
+              placeholder="예: ncpClientId 값 입력 (예: ab12cd34ef)"
+              class="input-field font-mono"
+            />
+            <p class="format-help">
+              * 네이버 클라우드 플랫폼(NCP) Maps에서 <code>Web Dynamic Map</code> 애플리케이션 등록 후 발급받은 <strong>Client ID</strong>를 입력하세요. 입력하고 [저장]하면 오시는 길에 네이버 지도가 실시간 반영됩니다.
+            </p>
+          </div>
+
 
           <div class="form-group full">
             <label class="form-label">지하철 이용 안내</label>
@@ -241,7 +288,13 @@ const handleSave = () => {
             </div>
             <div class="form-group">
               <label class="form-label">신랑 연락처</label>
-              <input v-model="weddingInfo.groom.phone" type="text" class="input-field" />
+              <input
+                v-model="weddingInfo.groom.phone"
+                type="text"
+                placeholder="예: 010-1234-5678"
+                class="input-field"
+                @input="handlePhoneInput('groom', $event)"
+              />
             </div>
             <div class="form-group">
               <label class="form-label">서열 (호칭)</label>
@@ -280,7 +333,13 @@ const handleSave = () => {
             </div>
             <div class="form-group">
               <label class="form-label">신부 연락처</label>
-              <input v-model="weddingInfo.bride.phone" type="text" class="input-field" />
+              <input
+                v-model="weddingInfo.bride.phone"
+                type="text"
+                placeholder="예: 010-1234-5678"
+                class="input-field"
+                @input="handlePhoneInput('bride', $event)"
+              />
             </div>
             <div class="form-group">
               <label class="form-label">서열 (호칭)</label>
@@ -747,4 +806,44 @@ const handleSave = () => {
   opacity: 0;
   transform: translate(-50%, 15px);
 }
+
+/* Naver Map Key Box Styles */
+.naver-map-key-box {
+  background: rgba(3, 199, 90, 0.03);
+  border: 1px dashed rgba(3, 199, 90, 0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.label-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mb-0 {
+  margin-bottom: 0 !important;
+}
+
+.ncp-link-btn {
+  font-size: 11px;
+  color: #03C75A;
+  font-weight: 600;
+  text-decoration: none;
+  background: rgba(3, 199, 90, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.ncp-link-btn:hover {
+  background: #03C75A;
+  color: #FFFFFF;
+}
+
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
 </style>
+

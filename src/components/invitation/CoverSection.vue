@@ -110,6 +110,9 @@ const formattedDate = computed(() => {
 
 <style scoped>
 .cover-container {
+  min-height: 100vh;
+  min-height: 100dvh;
+  justify-content: center;
   padding: 56px 20px 48px;
   text-align: center;
   position: relative;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { photos, weddingInfo, getOptimizedImageUrl, isStoryOpen } from '../../services/storage'
 import type { PhotoItem } from '../../types/wedding'
 import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause } from 'lucide-vue-next'
@@ -7,17 +7,30 @@ import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause } from 'lucide-v
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
 const isMoreLoading = ref(false)
-const INITIAL_COUNT = 9
+const isInitialLoading = ref(true)
+const INITIAL_COUNT = 6
 
 // --- Thumbnail Loading Delay Optimization ---
 const loadedThumbnails = ref<Record<string, boolean>>({})
 const onThumbnailLoad = (id: string) => {
   loadedThumbnails.value[id] = true
 }
+const handleImgRef = (el: HTMLImageElement | null, id: string) => {
+  if (el && el.complete && el.naturalWidth > 0) {
+    loadedThumbnails.value[id] = true
+  }
+}
 
 const toggleExpand = () => {
   if (isExpanded.value) {
     isExpanded.value = false
+    // '사진접기' 시 갤러리 섹션 영역 상단으로 부드럽게 스크롤 복원
+    nextTick(() => {
+      const el = document.querySelector('.gallery-section')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
   } else {
     isMoreLoading.value = true
     isExpanded.value = true
@@ -26,6 +39,7 @@ const toggleExpand = () => {
     }, 550)
   }
 }
+
 
 // --- Mobile Long-Press Peek Preview Popup ---
 const peekPhoto = ref<PhotoItem | null>(null)
@@ -151,8 +165,31 @@ let savedScrollY = 0
 let isNavigatingBack = false
 const isStoryImageLoaded = ref(false)
 
+const restoreScrollPosition = () => {
+  if (typeof savedScrollY !== 'number' || savedScrollY <= 0) return
+
+  const targetY = savedScrollY
+  window.scrollTo({ top: targetY, behavior: 'instant' })
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: targetY, behavior: 'instant' })
+    setTimeout(() => {
+      window.scrollTo({ top: targetY, behavior: 'instant' })
+    }, 40)
+    setTimeout(() => {
+      window.scrollTo({ top: targetY, behavior: 'instant' })
+    }, 120)
+    setTimeout(() => {
+      window.scrollTo({ top: targetY, behavior: 'instant' })
+    }, 250)
+  })
+}
+
 const openLightbox = (index: number) => {
-  savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
+  const currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
+  const galleryEl = document.querySelector('.gallery-section') as HTMLElement | null
+  const fallbackY = galleryEl ? galleryEl.offsetTop : 0
+  savedScrollY = currentY > 0 ? currentY : fallbackY
+
   isNavigatingBack = false
   history.pushState({ ...history.state, modal: 'gallery-story' }, '', window.location.href)
 
@@ -169,6 +206,9 @@ const openLightbox = (index: number) => {
 }
 
 const closeLightbox = (isFromPopState: boolean | Event = false) => {
+  // 이미 닫혀있는 상태라면 중복 실행 방지
+  if (selectedIndex.value === null && !isStoryOpen.value) return
+
   stopProgressAnim()
   clearTimeout(holdTimer)
   selectedIndex.value = null
@@ -184,17 +224,10 @@ const closeLightbox = (isFromPopState: boolean | Event = false) => {
     setTimeout(() => { isNavigatingBack = false }, 300)
   }
 
-  // 모달을 열기 전의 스크롤 위치 보존 및 복원 (즉시 + rAF + 타이머 다중 보장)
-  if (typeof savedScrollY === 'number' && savedScrollY >= 0) {
-    window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-      setTimeout(() => {
-        window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-      }, 50)
-    })
-  }
+  // 모달을 열기 전의 스크롤 위치 보존 및 복원 (오직 갤러리 스토리 종료 시에만 실행)
+  restoreScrollPosition()
 }
+
 
 const prevPhoto = () => {
   if (selectedIndex.value === null) return
@@ -328,24 +361,22 @@ const handleKeyDown = (e: KeyboardEvent) => {
 }
 
 const handlePopState = () => {
-  if (selectedIndex.value !== null) {
+  // 오직 갤러리 스토리가 열려 있는 상태에서 발생한 뒤로가기인 경우에만 닫기 실행
+  if (selectedIndex.value !== null || isStoryOpen.value) {
     closeLightbox(true)
-  }
-  if (typeof savedScrollY === 'number' && savedScrollY >= 0) {
-    window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-      setTimeout(() => {
-        window.scrollTo({ top: savedScrollY, behavior: 'instant' })
-      }, 50)
-    })
   }
 }
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('popstate', handlePopState)
+
+  // 청첩장 최초 접속 시 3x3 썸네일 그리드 스켈레톤 로딩 노출 보장 (0.55초 후 페이드인)
+  setTimeout(() => {
+    isInitialLoading.value = false
+  }, 550)
 })
+
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
@@ -380,19 +411,22 @@ onUnmounted(() => {
         @click="handleThumbnailClick(index)"
         @contextmenu.prevent
       >
-        <!-- Skeleton Placeholder while loading from Firebase or More Loading -->
+        <!-- Skeleton Placeholder while loading initially, from Firebase, or More Loading -->
         <div
-          v-if="!loadedThumbnails[photo.id] || (isMoreLoading && index >= INITIAL_COUNT)"
+          v-if="!loadedThumbnails[photo.id] || isInitialLoading || (isMoreLoading && index >= INITIAL_COUNT)"
           class="thumbnail-skeleton"
         >
           <div class="skeleton-shimmer"></div>
         </div>
 
         <img
-          :src="getOptimizedImageUrl(photo.url, 220, 65)"
+          :ref="(el) => handleImgRef(el as HTMLImageElement, photo.id)"
+          :src="photo.thumbnailUrl || getOptimizedImageUrl(photo.url, 240, 60)"
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
-          :class="{ 'is-loaded': loadedThumbnails[photo.id] && (!isMoreLoading || index < INITIAL_COUNT) }"
+          :class="{ 'is-loaded': loadedThumbnails[photo.id] && !isInitialLoading && (!isMoreLoading || index < INITIAL_COUNT) }"
+          :loading="index < INITIAL_COUNT ? 'eager' : 'lazy'"
+          :fetchpriority="index < INITIAL_COUNT ? 'high' : 'auto'"
           decoding="async"
           draggable="false"
           @contextmenu.prevent
@@ -554,14 +588,6 @@ onUnmounted(() => {
                 @load="isStoryImageLoaded = true"
               />
             </Transition>
-
-            <!-- Subtle Tap Zone Guides on PC hover -->
-            <div class="story-tap-indicator left font-sans">
-              <ChevronLeft :size="24" />
-            </div>
-            <div class="story-tap-indicator right font-sans">
-              <ChevronRight :size="24" />
-            </div>
           </div>
 
           <!-- 4. Bottom Story Caption Sticker -->

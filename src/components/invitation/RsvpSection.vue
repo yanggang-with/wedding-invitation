@@ -54,6 +54,16 @@ const handleSubmit = async () => {
   }
 }
 
+import { formatPhoneNumber } from '../../utils/format'
+
+
+const handlePhoneInput = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const formatted = formatPhoneNumber(target.value)
+  form.value.phone = formatted
+  target.value = formatted
+}
+
 const resetForm = () => {
   form.value = {
     side: 'groom',
@@ -205,8 +215,10 @@ const resetForm = () => {
             id="guestPhone"
             v-model="form.phone"
             type="tel"
-            placeholder="010-0000-0000 (선택 사항)"
+            maxlength="13"
+            placeholder="010-0000-0000 (번호만 입력해도 자동 적용)"
             class="input-field"
+            @input="handlePhoneInput"
           />
         </div>
 
