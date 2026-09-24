@@ -661,11 +661,19 @@ export function formatWeddingDate(dateStr: string, formatPattern?: string, custo
  * Returns an optimized image URL for fast thumbnail rendering.
  * Automatically resizes remote images (such as Unsplash) to lightweight dimensions and quality.
  */
-export function getOptimizedImageUrl(url: string, width = 360, quality = 75): string {
+export function getOptimizedImageUrl(url: string, width = 240, quality = 65): string {
   if (!url) return ''
+  // 1. Unsplash images: automatically request WebP, exact thumbnail width, and optimized compression
   if (url.includes('images.unsplash.com')) {
     const base = url.split('?')[0]
-    return `${base}?auto=format&fit=crop&w=${width}&q=${quality}`
+    return `${base}?auto=format&fit=crop&w=${width}&q=${quality}&fm=webp`
+  }
+  // 2. Google Drive images: append width param to googleusercontent CDN
+  if (url.includes('drive.google.com') || url.includes('lh3.googleusercontent.com')) {
+    const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/)
+    if (fileIdMatch && fileIdMatch[1]) {
+      return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}=w${width}`
+    }
   }
   return url
 }
@@ -763,6 +771,21 @@ export async function uploadToGoogleDrive(
   return result.url
 }
 
+export function formatDirectMediaUrl(url: string, type?: 'image' | 'video'): string {
+  if (!url) return ''
+  // Google Drive view/open link -> direct image/media content link
+  if (url.includes('drive.google.com')) {
+    const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/)
+    if (fileIdMatch && fileIdMatch[1]) {
+      if (type === 'video') {
+        return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`
+      }
+      return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`
+    }
+  }
+  return url
+}
+
 export async function uploadLiveSnapMedia(file: File, onProgress?: (percent: number) => void): Promise<{ url: string; type: 'image' | 'video' }> {
   const isVideo = file.type.startsWith('video/')
   if (isVideo) {
@@ -781,7 +804,8 @@ export async function uploadLiveSnapMedia(file: File, onProgress?: (percent: num
         adminSettings.value.googleDriveFolderId,
         onProgress
       )
-      return { url: driveUrl, type: isVideo ? 'video' : 'image' }
+      const directUrl = formatDirectMediaUrl(driveUrl, isVideo ? 'video' : 'image')
+      return { url: directUrl, type: isVideo ? 'video' : 'image' }
     } catch (err: any) {
       console.error('Google Drive upload failed:', err)
       throw new Error(`Google Drive 업로드 실패: ${err.message || '알 수 없는 오류'}`)

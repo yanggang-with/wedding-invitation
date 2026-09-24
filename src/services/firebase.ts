@@ -103,9 +103,13 @@ export async function uploadToFirebaseStorage(
   const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storageRef = ref(storage, `photos/${timestamp}_${cleanName}`)
 
+  const metadata = {
+    contentType: file.type || (cleanName.endsWith('.mp4') ? 'video/mp4' : 'application/octet-stream')
+  }
+
   const uploadPromise = new Promise<string>((resolve, reject) => {
     if (onProgress) {
-      const uploadTask = uploadBytesResumable(storageRef, file)
+      const uploadTask = uploadBytesResumable(storageRef, file, metadata)
       uploadTask.on(
         'state_changed',
         (snapshot) => {
@@ -127,7 +131,7 @@ export async function uploadToFirebaseStorage(
         }
       )
     } else {
-      uploadBytes(storageRef, file)
+      uploadBytes(storageRef, file, metadata)
         .then(snapshot => getDownloadURL(snapshot.ref))
         .then(resolve)
         .catch(reject)

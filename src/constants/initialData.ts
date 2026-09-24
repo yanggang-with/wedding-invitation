@@ -200,11 +200,11 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
   },
   {
     id: 'snap-2',
-    type: 'image',
-    // Horizontal landscape (16:10 ratio)
-    url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=800&h=500&q=80',
+    type: 'video',
+    // Horizontal landscape (16:9 ratio)
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     senderName: '직장 동료',
-    message: '결혼식장 생화 장식도 너무 예쁘네요. 축하드립니다!',
+    message: '결혼식장 생화 장식과 현장 분위기 영상으로 담아봤어요. 축하드립니다! 🎥',
     createdAt: new Date(Date.now() - 3600000).toISOString()
   },
   {
@@ -262,4 +262,137 @@ export const DEFAULT_LIVE_SNAPS: LiveSnapItem[] = [
     createdAt: new Date(Date.now() - 25200000).toISOString()
   }
 ]
+
+// ==============================================================
+// 웨딩 테마 전용 감성 일러스트 및 샘플 비디오 (현장스냅 ON 시 기본 예시용)
+// ==============================================================
+export const WEDDING_ILLUSTRATION_SNAPS: LiveSnapItem[] = [
+  {
+    id: 'illust-snap-1',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=700&q=80',
+    senderName: '웨딩 아뜰리에',
+    message: '두 사람의 가장 눈부신 순간을 담은 일러스트 🎨',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:00.000Z'
+  },
+  {
+    id: 'illust-snap-2',
+    type: 'video',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    senderName: '현장 영상 스케치',
+    message: '축복으로 가득했던 오늘의 생생한 현장 영상입니다 🎬',
+    aspectRatio: '16/9',
+    createdAt: '2026-09-01T00:00:01.000Z'
+  },
+  {
+    id: 'illust-snap-3',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=700&q=80',
+    senderName: '플라워 & 부케',
+    message: '설렘 가득한 버진로드를 수놓은 웨딩 플라워 💐',
+    aspectRatio: '1/1',
+    createdAt: '2026-09-01T00:00:02.000Z'
+  },
+  {
+    id: 'illust-snap-4',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=700&q=80',
+    senderName: '영원의 약속',
+    message: '마주 잡은 두 손에 깃든 영원한 사랑의 서약 💍',
+    aspectRatio: '3/2',
+    createdAt: '2026-09-01T00:00:03.000Z'
+  },
+  {
+    id: 'illust-snap-5',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&w=700&q=80',
+    senderName: '샴페인 셀러브레이션',
+    message: '새로운 시작을 축복하는 달콤한 축배 🥂',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:04.000Z'
+  },
+  {
+    id: 'illust-snap-6',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=700&q=80',
+    senderName: '웨딩 세레머니',
+    message: '함께 걸어갈 눈부신 꽃길의 첫걸음 ✨',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:05.000Z'
+  },
+  {
+    id: 'illust-snap-7',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=700&q=80',
+    senderName: '클래식 웨딩카',
+    message: '영원한 행복을 향해 출발하는 웨딩 로드 🚗🌸',
+    aspectRatio: '16/9',
+    createdAt: '2026-09-01T00:00:06.000Z'
+  },
+  {
+    id: 'illust-snap-8',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=700&q=80',
+    senderName: '순백의 베일',
+    message: '수줍은 미소와 함께 피어난 순백의 설렘 👰',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:07.000Z'
+  },
+  {
+    id: 'illust-snap-9',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=700&q=80',
+    senderName: '3단 플라워 케이크',
+    message: '가장 달콤한 오늘, 함께 나누는 축복의 케이크 🎂',
+    aspectRatio: '1/1',
+    createdAt: '2026-09-01T00:00:08.000Z'
+  },
+  {
+    id: 'illust-snap-10',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?auto=format&fit=crop&w=700&q=80',
+    senderName: '캔들라이트 디너',
+    message: '은은한 촛불 아래 따뜻하게 피어오른 이야기 🕯️',
+    aspectRatio: '3/2',
+    createdAt: '2026-09-01T00:00:09.000Z'
+  },
+  {
+    id: 'illust-snap-11',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1544077960-604201fe74bc?auto=format&fit=crop&w=700&q=80',
+    senderName: '사랑의 서약서',
+    message: '마음 깊이 새겨둔 평생의 약속과 진심 💌',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:10.000Z'
+  },
+  {
+    id: 'illust-snap-12',
+    type: 'video',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    senderName: '세레머니 하이라이트',
+    message: '모두의 환호와 박수가 쏟아지던 감동의 순간 🎥',
+    aspectRatio: '16/9',
+    createdAt: '2026-09-01T00:00:11.000Z'
+  },
+  {
+    id: 'illust-snap-13',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?auto=format&fit=crop&w=700&q=80',
+    senderName: '컨페티 세레머니',
+    message: '하늘 가득 흩날리는 축복의 꽃비 🎉',
+    aspectRatio: '4/5',
+    createdAt: '2026-09-01T00:00:12.000Z'
+  },
+  {
+    id: 'illust-snap-14',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=700&q=80',
+    senderName: '황홀한 샹들리에',
+    message: '별빛처럼 쏟아지는 아름다운 예식의 밤 ✨',
+    aspectRatio: '1/1',
+    createdAt: '2026-09-01T00:00:13.000Z'
+  }
+]
+
 

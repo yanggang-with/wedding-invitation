@@ -13,6 +13,13 @@ defineEmits<{
 
 <template>
   <footer class="share-footer font-sans">
+    <!-- Top Decorative Accent -->
+    <div class="footer-top-ornament">
+      <span class="ornament-line"></span>
+      <span class="ornament-text font-serif">THANK YOU</span>
+      <span class="ornament-line"></span>
+    </div>
+
     <!-- Docked Share Button Target Slot -->
     <div class="footer-share-destination">
       <button
@@ -41,10 +48,40 @@ defineEmits<{
 
 <style scoped>
 .share-footer {
-  padding: 40px 24px 72px;
-  background-color: var(--bg-ivory);
-  border-top: 1px solid var(--border-light);
+  padding: 64px 24px 76px;
+  background: linear-gradient(180deg, #F4ECE1 0%, #EDE4D6 45%, #E4DAC9 100%);
+  border-top: 1px solid rgba(197, 160, 89, 0.32);
+  box-shadow: inset 0 16px 32px -12px rgba(140, 115, 85, 0.12);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.footer-top-ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  opacity: 0.8;
+  margin-bottom: -10px;
+}
+
+.ornament-line {
+  width: 36px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+}
+
+.ornament-text {
+  font-size: 11px;
+  letter-spacing: 3.5px;
+  color: var(--gold-dark);
+  font-weight: 600;
 }
 
 .footer-share-destination {
@@ -52,7 +89,6 @@ defineEmits<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 28px;
   min-height: 96px;
 }
 

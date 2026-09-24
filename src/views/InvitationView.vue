@@ -58,11 +58,19 @@ const activeNavIndex = computed(() => {
   return idx !== -1 ? idx : 0
 })
 
+let isNavigatingViaClick = false
+let navClickTimer: any = null
+
 const navigateTo = (sectionIndex: number) => {
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
   if (sections[sectionIndex]) {
-    scrollToSection(sections[sectionIndex])
+    isNavigatingViaClick = true
     currentSectionIndex.value = sectionIndex
+    scrollToSection(sections[sectionIndex])
+    clearTimeout(navClickTimer)
+    navClickTimer = setTimeout(() => {
+      isNavigatingViaClick = false
+    }, 850)
   }
 }
 
@@ -111,7 +119,9 @@ const handleShare = () => {
 const handleScroll = () => {
   if (scrollThrottle) return
   scrollThrottle = requestAnimationFrame(() => {
-    updateCurrentSection()
+    if (!isNavigatingViaClick) {
+      updateCurrentSection()
+    }
     checkFooterState()
     scrollThrottle = null
   })
@@ -137,15 +147,49 @@ const scrollToSection = (targetEl: HTMLElement) => {
   targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+let sectionObserver: IntersectionObserver | null = null
+
+const initSectionReveal = () => {
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
+  if (!sections.length) return
+
+  // 첫 번째 섹션(Cover)은 즉시 표시
+  if (sections[0]) {
+    sections[0].classList.add('is-visible')
+  }
+
+  sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible')
+      }
+    })
+  }, {
+    threshold: 0.33,
+    rootMargin: '0px'
+  })
+
+  sections.forEach((sec, idx) => {
+    if (idx > 0) {
+      sectionObserver?.observe(sec)
+    }
+  })
+}
+
 onMounted(() => {
   window.addEventListener('scroll', handleScroll, { passive: true })
   updateCurrentSection()
   checkFooterState()
+  initSectionReveal()
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
   if (scrollThrottle) cancelAnimationFrame(scrollThrottle)
+  if (sectionObserver) {
+    sectionObserver.disconnect()
+    sectionObserver = null
+  }
 })
 </script>
 
@@ -258,6 +302,22 @@ onUnmounted(() => {
 .invitation-section-wrapper {
   width: 100%;
   box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  will-change: opacity;
+}
+
+.invitation-section-wrapper.is-visible,
+.invitation-section-wrapper:first-child {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invitation-section-wrapper {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 /* Floating Bottom Navigation & Share Bar Wrapper */

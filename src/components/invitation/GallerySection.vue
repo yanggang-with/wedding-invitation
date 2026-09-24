@@ -147,24 +147,53 @@ const runProgressAnim = () => {
   animId = requestAnimationFrame(tick)
 }
 
+let savedScrollY = 0
+let isNavigatingBack = false
+const isStoryImageLoaded = ref(false)
+
 const openLightbox = (index: number) => {
+  savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
+  isNavigatingBack = false
+  history.pushState({ ...history.state, modal: 'gallery-story' }, '', window.location.href)
+
   selectedIndex.value = index
   isStoryOpen.value = true
   progress.value = 0
   pausedProgress = 0
   isPaused.value = false
   isHolding.value = false
+  isStoryImageLoaded.value = false
   document.body.style.overflow = 'hidden'
+
   runProgressAnim()
 }
 
-const closeLightbox = () => {
+const closeLightbox = (isFromPopState: boolean | Event = false) => {
   stopProgressAnim()
   clearTimeout(holdTimer)
   selectedIndex.value = null
   isStoryOpen.value = false
   isHolding.value = false
   document.body.style.overflow = ''
+
+  const isPop = isFromPopState === true
+
+  if (!isPop && history.state?.modal === 'gallery-story' && !isNavigatingBack) {
+    isNavigatingBack = true
+    history.back()
+    setTimeout(() => { isNavigatingBack = false }, 300)
+  }
+
+  // 모달을 열기 전의 스크롤 위치 보존 및 복원 (즉시 + rAF + 타이머 다중 보장)
+  if (typeof savedScrollY === 'number' && savedScrollY >= 0) {
+    window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+      setTimeout(() => {
+        window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+      }, 50)
+    })
+  }
 }
 
 const prevPhoto = () => {
@@ -172,6 +201,8 @@ const prevPhoto = () => {
   stopProgressAnim()
   progress.value = 0
   pausedProgress = 0
+  isPaused.value = false // 이전/다음 사진으로 이동 시 일시정지 해제 후 다시 재생
+  isStoryImageLoaded.value = false
   if (selectedIndex.value > 0) {
     selectedIndex.value = selectedIndex.value - 1
   } else {
@@ -185,6 +216,8 @@ const nextPhoto = () => {
   stopProgressAnim()
   progress.value = 0
   pausedProgress = 0
+  isPaused.value = false // 이전/다음 사진으로 이동 시 일시정지 해제 후 다시 재생
+  isStoryImageLoaded.value = false
   if (selectedIndex.value >= sortedPhotos.value.length - 1) {
     // 맨 마지막 사진에 도달했을 때 첫 번째 사진으로 가지 않고 닫힘
     closeLightbox()
@@ -294,12 +327,29 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 }
 
+const handlePopState = () => {
+  if (selectedIndex.value !== null) {
+    closeLightbox(true)
+  }
+  if (typeof savedScrollY === 'number' && savedScrollY >= 0) {
+    window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+      setTimeout(() => {
+        window.scrollTo({ top: savedScrollY, behavior: 'instant' })
+      }, 50)
+    })
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('popstate', handlePopState)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('popstate', handlePopState)
   stopProgressAnim()
   clearTimeout(holdTimer)
   clearTimeout(peekTimer)
@@ -328,6 +378,7 @@ onUnmounted(() => {
         @touchend="handleThumbnailTouchEnd"
         @touchcancel="handleThumbnailTouchEnd"
         @click="handleThumbnailClick(index)"
+        @contextmenu.prevent
       >
         <!-- Skeleton Placeholder while loading from Firebase or More Loading -->
         <div
@@ -338,12 +389,13 @@ onUnmounted(() => {
         </div>
 
         <img
-          :src="getOptimizedImageUrl(photo.url, 400, 75)"
+          :src="getOptimizedImageUrl(photo.url, 220, 65)"
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
           :class="{ 'is-loaded': loadedThumbnails[photo.id] && (!isMoreLoading || index < INITIAL_COUNT) }"
-          loading="lazy"
           decoding="async"
+          draggable="false"
+          @contextmenu.prevent
           @load="onThumbnailLoad(photo.id)"
         />
       </div>
@@ -366,41 +418,43 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Mobile Touch & Hold Peek Preview Layer Popup -->
-    <Transition name="peek-fade">
-      <div
-        v-if="isPeeking && peekPhoto"
-        class="peek-modal-overlay"
-        @contextmenu.prevent
-      >
-        <div class="peek-card">
-          <div class="peek-badge-row">
-            <span class="peek-badge font-sans">미리보기</span>
-          </div>
-          <div class="peek-image-container">
-            <!-- Peek Skeleton Loader -->
-            <div v-if="!isPeekImageLoaded" class="peek-skeleton">
-              <div class="skeleton-shimmer"></div>
-              <div class="peek-spinner"></div>
+    <!-- Mobile Touch & Hold Peek Preview (브라우저 전체화면 텔레포트) -->
+    <Teleport to="body">
+      <Transition name="peek-fade">
+        <div
+          v-if="isPeeking && peekPhoto"
+          class="peek-modal-overlay"
+          @contextmenu.prevent
+          @touchmove.prevent
+        >
+          <div class="peek-card">
+            <div class="peek-image-container">
+              <!-- Peek Skeleton Loader -->
+              <div v-if="!isPeekImageLoaded" class="peek-skeleton">
+                <div class="skeleton-shimmer"></div>
+                <div class="peek-spinner"></div>
+              </div>
+              <img
+                :src="getOptimizedImageUrl(peekPhoto.url, 800, 85)"
+                :alt="peekPhoto.caption || '사진 미리보기'"
+                class="peek-image"
+                :class="{ 'is-loaded': isPeekImageLoaded }"
+                draggable="false"
+                @contextmenu.prevent
+                @load="isPeekImageLoaded = true"
+              />
             </div>
-            <img
-              :src="getOptimizedImageUrl(peekPhoto.url, 800, 85)"
-              :alt="peekPhoto.caption || '사진 미리보기'"
-              class="peek-image"
-              :class="{ 'is-loaded': isPeekImageLoaded }"
-              @load="isPeekImageLoaded = true"
-            />
+            <div v-if="peekPhoto.caption" class="peek-caption font-serif">
+              {{ peekPhoto.caption }}
+            </div>
           </div>
-          <div v-if="peekPhoto.caption" class="peek-caption font-serif">
-            {{ peekPhoto.caption }}
-          </div>
-          <p class="peek-hint font-sans">손을 떼면 미리보기가 닫힙니다</p>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
 
-    <!-- Fullscreen Instagram Story Modal -->
-    <Transition name="story-modal-fade">
+    <!-- Fullscreen Instagram Story Modal (브라우저 전체화면 텔레포트) -->
+    <Teleport to="body">
+      <Transition name="story-modal-fade">
       <div
         v-if="selectedIndex !== null"
         class="story-backdrop"
@@ -483,13 +537,21 @@ onUnmounted(() => {
 
           <!-- 3. Main Story Photo -->
           <div class="story-media-container">
+            <!-- Story Photo Skeleton Shimmer & Spinner Loader -->
+            <div v-if="!isStoryImageLoaded" class="story-skeleton">
+              <div class="skeleton-shimmer"></div>
+              <div class="story-spinner"></div>
+            </div>
+
             <Transition name="photo-fade" mode="out-in">
               <img
                 :key="sortedPhotos[selectedIndex].id"
                 :src="getOptimizedImageUrl(sortedPhotos[selectedIndex].url, 1200, 85)"
                 :alt="sortedPhotos[selectedIndex].caption || '웨딩 스토리 사진'"
                 class="story-image"
+                :class="{ 'is-loaded': isStoryImageLoaded }"
                 draggable="false"
+                @load="isStoryImageLoaded = true"
               />
             </Transition>
 
@@ -512,13 +574,6 @@ onUnmounted(() => {
               <span>{{ sortedPhotos[selectedIndex].caption }}</span>
             </div>
           </div>
-
-          <!-- 5. Hold/Pause Indicator -->
-          <Transition name="hold-fade">
-            <div v-if="isHolding" class="story-hold-indicator font-sans">
-              화면 정지됨
-            </div>
-          </Transition>
         </div>
 
         <!-- Desktop External Navigation Arrows -->
@@ -530,6 +585,7 @@ onUnmounted(() => {
         </button>
       </div>
     </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -553,9 +609,9 @@ onUnmounted(() => {
   overflow: hidden;
   cursor: pointer;
   background-color: var(--bg-warm);
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
 .thumbnail-skeleton {
@@ -599,6 +655,10 @@ onUnmounted(() => {
   object-fit: cover;
   opacity: 0;
   transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .thumbnail-img.is-loaded {
@@ -676,22 +736,21 @@ onUnmounted(() => {
   transition: background-image 0.4s ease;
 }
 
-/* Story Frame: Phone Aspect Ratio on PC, Fullscreen on Mobile */
+/* Story Frame: Fullscreen Overlay on all devices */
 .story-frame {
   position: relative;
-  width: 100%;
-  max-width: 440px;
+  width: 100vw;
+  max-width: 100vw;
   height: 100vh;
   height: 100dvh;
-  max-height: 90vh;
-  aspect-ratio: 9 / 16;
+  max-height: 100dvh;
   background: #000000;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+  box-shadow: none;
   user-select: none;
   touch-action: none;
   cursor: pointer;
@@ -703,17 +762,6 @@ onUnmounted(() => {
     height: 100vh;
     height: 100dvh;
     max-height: 100dvh;
-  }
-
-  .story-frame {
-    width: 100vw;
-    max-width: 100vw;
-    height: 100vh;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0;
-    aspect-ratio: auto;
-    box-shadow: none;
   }
 
   .story-progress-wrapper {
@@ -864,12 +912,57 @@ onUnmounted(() => {
   background: #000000;
 }
 
+.story-skeleton {
+  position: absolute;
+  inset: 0;
+  background: #181614;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.story-skeleton .skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+}
+
+.story-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--gold-primary, #C8A97E);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  z-index: 3;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .story-image {
   width: 100%;
   height: 100%;
   object-fit: contain;
   user-select: none;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.story-image.is-loaded {
+  opacity: 1;
 }
 
 /* Tap Indicators on Desktop */
@@ -976,11 +1069,11 @@ onUnmounted(() => {
 }
 
 .desktop-side-nav.prev {
-  left: calc(50% - 220px - 72px);
+  left: 24px;
 }
 
 .desktop-side-nav.next {
-  right: calc(50% - 220px - 72px);
+  right: 24px;
 }
 
 .desktop-side-nav:hover {
@@ -1030,7 +1123,7 @@ onUnmounted(() => {
 }
 
 /* =========================================================
-   Mobile Touch & Hold Peek Preview Layer Popup
+   Mobile Touch & Hold Peek Preview (뒷 배경 블러 효과)
    ========================================================= */
 
 .peek-modal-overlay {
@@ -1040,55 +1133,43 @@ onUnmounted(() => {
   height: 100dvh;
   max-height: 100dvh;
   z-index: 1000;
-  background: rgba(15, 13, 11, 0.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(10, 10, 10, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px max(24px, env(safe-area-inset-right, 24px)) max(24px, env(safe-area-inset-bottom, 24px)) max(24px, env(safe-area-inset-left, 24px));
   pointer-events: none;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .peek-card {
-  width: 100%;
+  width: 86vw;
   max-width: 320px;
-  background: #FFFFFF;
-  border-radius: 20px;
-  padding: 14px;
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   transform-origin: center center;
   will-change: transform, opacity;
-}
-
-.peek-badge-row {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.peek-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--gold-dark);
-  background: var(--gold-soft);
-  border: 1px solid var(--border-color);
-  padding: 3px 10px;
-  border-radius: 9999px;
+  -webkit-touch-callout: none !important;
 }
 
 .peek-image-container {
   width: 100%;
   aspect-ratio: 4 / 5;
-  border-radius: 12px;
+  border-radius: 18px;
   overflow: hidden;
   background: #1e1b18;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
   position: relative;
 }
 
@@ -1119,6 +1200,10 @@ onUnmounted(() => {
   display: block;
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .peek-image.is-loaded {
@@ -1126,19 +1211,15 @@ onUnmounted(() => {
 }
 
 .peek-caption {
-  font-size: 13.5px;
-  color: var(--text-main);
+  font-size: 14px;
+  color: #FFFFFF;
   text-align: center;
-  line-height: 1.45;
-  padding: 2px 8px 0;
+  line-height: 1.5;
+  padding: 0 10px;
   word-break: keep-all;
-}
-
-.peek-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  letter-spacing: 0.2px;
-  margin-top: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  font-weight: 400;
+  letter-spacing: -0.2px;
 }
 
 /* Peek Transitions */
