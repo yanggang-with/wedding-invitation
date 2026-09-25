@@ -145,7 +145,7 @@ const copyAccount = async (item: AccountItem) => {
 
 <style scoped>
 .account-section {
-  background-color: #FFFFFF;
+  background-color: var(--section-bg, #FFFFFF);
 }
 
 .accordion-group {

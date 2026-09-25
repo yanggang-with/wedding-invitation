@@ -117,7 +117,8 @@ export const DEFAULT_WEDDING_INFO: WeddingInfo = {
   bgmTitle: 'Romantic Piano Wedding Melody',
   bgmAutoPlay: false,
   kakaoApiKey: '',
-  naverMapClientId: ''
+  naverMapClientId: '',
+  showRsvp: true
 }
 
 
@@ -187,6 +188,7 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   useFirebase: false,
   forceShowLiveSnap: false,
   showLiveSnapSection: true,
+  showRsvpSection: true,
   googleDriveScriptUrl: '',
   googleDriveFolderId: '',
   allowedGoogleEmails: [],

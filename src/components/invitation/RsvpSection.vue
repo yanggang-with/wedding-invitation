@@ -246,7 +246,7 @@ const resetForm = () => {
 
 <style scoped>
 .rsvp-section {
-  background-color: var(--bg-ivory);
+  background-color: var(--section-bg, var(--bg-ivory));
 }
 
 .rsvp-form-card {

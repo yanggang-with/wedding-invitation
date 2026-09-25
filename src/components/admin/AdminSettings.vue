@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import {
   adminSettings,
   weddingInfo,
@@ -28,7 +28,11 @@ import {
   Trash2,
   Mail,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  Copy,
+  SlidersHorizontal,
+  CheckSquare,
+  Camera
 } from 'lucide-vue-next'
 
 
@@ -168,15 +172,65 @@ const handleResetSample = () => {
 
 // Naver Maps API Key Management
 const naverMapSavedMsg = ref(false)
-const handleSaveNaverKey = () => {
+const currentHostUrl = computed(() => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+  return 'http://localhost:5173'
+})
+const urlCopied = ref(false)
+const copyHostUrl = () => {
+  if (navigator?.clipboard) {
+    navigator.clipboard.writeText(currentHostUrl.value)
+    urlCopied.value = true
+    setTimeout(() => { urlCopied.value = false }, 2000)
+  }
+}
+
+const handleSaveNaverKey = async () => {
   try {
     localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
     naverMapSavedMsg.value = true
     setTimeout(() => {
       naverMapSavedMsg.value = false
     }, 2500)
   } catch (err) {
     console.error('Failed to save naver map key:', err)
+  }
+}
+
+const handleToggleRsvpSection = async () => {
+  const currentVal = weddingInfo.value.showRsvp !== false
+  const nextVal = !currentVal
+  weddingInfo.value.showRsvp = nextVal
+  adminSettings.value.showRsvpSection = nextVal
+
+  try {
+    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
+  } catch (err) {
+    console.error('Failed to save RSVP visibility:', err)
+  }
+}
+
+const handleToggleLiveSnapSection = async () => {
+  const currentVal = adminSettings.value.showLiveSnapSection !== false
+  const nextVal = !currentVal
+  adminSettings.value.showLiveSnapSection = nextVal
+
+  try {
+    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
+  } catch (err) {
+    console.error('Failed to save LiveSnap visibility:', err)
   }
 }
 </script>
@@ -419,7 +473,60 @@ const handleSaveNaverKey = () => {
         </div>
       </div>
 
-      <!-- 3. Naver Maps OpenAPI Key -->
+      <!-- 3. Section Visibility Settings -->
+      <div class="card-paper block-card">
+        <div class="block-title-row">
+          <SlidersHorizontal :size="18" class="block-icon gold" />
+          <h4 class="block-title font-serif">청첩장 섹션 노출 관리</h4>
+        </div>
+
+        <p class="block-desc">
+          모바일 청첩장에 표시할 섹션을 원하는 대로 켜고 끌 수 있습니다.
+          변경 즉시 하객들의 화면에 실시간 자동 반영되며, 섹션이 숨겨져도 배경색이 어색하게 겹치지 않고 자연스럽게 교차됩니다.
+        </p>
+
+        <div class="section-toggle-list">
+          <!-- RSVP Section Toggle -->
+          <div class="section-toggle-item">
+            <div class="toggle-item-info">
+              <div class="toggle-item-title-row">
+                <CheckSquare :size="16" class="toggle-item-icon gold" />
+                <span class="toggle-item-title font-medium">참석의사 전달 (RSVP) 섹션</span>
+              </div>
+              <p class="toggle-item-desc">하객들의 참석 여부, 동행 인원, 식사 여부를 조사하는 설문 양식입니다.</p>
+            </div>
+            <label class="toggle-switch">
+              <input
+                type="checkbox"
+                :checked="weddingInfo.showRsvp !== false"
+                @change="handleToggleRsvpSection"
+              />
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <!-- LiveSnap Section Toggle -->
+          <div class="section-toggle-item">
+            <div class="toggle-item-info">
+              <div class="toggle-item-title-row">
+                <Camera :size="16" class="toggle-item-icon gold" />
+                <span class="toggle-item-title font-medium">현장스냅 (Live Snap) 섹션</span>
+              </div>
+              <p class="toggle-item-desc">하객들이 결혼식 당일 사진과 짧은 영상을 실시간으로 올리는 피드입니다.</p>
+            </div>
+            <label class="toggle-switch">
+              <input
+                type="checkbox"
+                :checked="adminSettings.showLiveSnapSection !== false"
+                @change="handleToggleLiveSnapSection"
+              />
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Naver Maps OpenAPI Key -->
       <div class="card-paper block-card">
         <div class="block-title-row">
           <MapPin :size="18" class="block-icon naver-green" />
@@ -450,8 +557,36 @@ const handleSaveNaverKey = () => {
             placeholder="예: ncpClientId 값 입력 (예: ab12cd34ef)"
             class="input-field font-mono"
           />
+          <div class="naver-troubleshoot-box">
+            <h5 class="troubleshoot-title">⚠️ "네이버 인증 실패" 오류 해결 체크리스트</h5>
+            <ol class="troubleshoot-list">
+              <li>
+                <strong>NCP 콘솔의 [Web 서비스 URL] 등록 (가장 빈번)</strong><br />
+                네이버 지도 API는 등록된 도메인에서만 동작합니다. NCP 콘솔의 Application [수정] ➔ [Web 서비스 URL]에 현재 접속 주소를 등록해야 합니다.
+                <div class="host-url-box">
+                  <span class="host-url-label">현재 브라우저 주소:</span>
+                  <code class="host-url-code">{{ currentHostUrl }}</code>
+                  <button type="button" class="btn-copy-small" @click="copyHostUrl">
+                    <Check v-if="urlCopied" :size="12" class="text-green" />
+                    <Copy v-else :size="12" />
+                    <span>{{ urlCopied ? '복사됨!' : '주소 복사' }}</span>
+                  </button>
+                </div>
+                <span class="url-tip">* 로컬 개발 중이라면 <code>http://localhost:5173</code>, 배포 사이트라면 배포된 도메인을 모두 등록하세요. (뒤에 슬래시 <code>/</code> 없이 등록)</span>
+              </li>
+              <li>
+                <strong>Application 서비스 선택에서 [Web Dynamic Map] 체크 확인</strong><br />
+                NCP 콘솔 Application 수정 시 <code>Maps</code> 아래의 <code>Web Dynamic Map</code>이 반드시 체크되어 있어야 합니다.
+              </li>
+              <li>
+                <strong>Client ID 확인</strong><br />
+                Secret Key가 아닌 <code>Client ID</code>(영문·숫자 조합)를 입력했는지 확인하세요.
+              </li>
+            </ol>
+          </div>
+
           <p class="field-hint">
-            * <a href="https://www.ncloud.com/product/applicationService/maps" target="_blank" rel="noopener noreferrer" class="text-link">네이버 클라우드 플랫폼(NCP)</a>에서 <code>Web Dynamic Map</code> 서비스를 신청하고 발급받은 Client ID를 입력하세요.
+            * <a href="https://www.ncloud.com/product/applicationService/maps" target="_blank" rel="noopener noreferrer" class="text-link">네이버 클라우드 플랫폼(NCP)</a> 콘솔에서 설정을 수정한 후 아래 [저장]을 눌러주세요.
           </p>
         </div>
 
@@ -464,7 +599,7 @@ const handleSaveNaverKey = () => {
         </div>
       </div>
 
-      <!-- 4. Reset Factory Sample Data -->
+      <!-- 5. Reset Factory Sample Data -->
       <div class="card-paper block-card danger-zone">
 
         <div class="block-title-row">
@@ -683,6 +818,53 @@ input:checked + .slider {
 
 input:checked + .slider:before {
   transform: translateX(20px);
+}
+
+/* Section Toggle Styles */
+.section-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.section-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: rgba(239, 231, 218, 0.4);
+  border: 1px solid rgba(168, 131, 80, 0.25);
+  border-radius: 12px;
+}
+
+.toggle-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.toggle-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.toggle-item-icon {
+  color: var(--gold-dark);
+}
+
+.toggle-item-title {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.toggle-item-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
 }
 
 .toggle-label {
@@ -984,5 +1166,86 @@ input:checked + .slider:before {
   color: var(--text-muted);
   margin-top: 6px;
   line-height: 1.5;
+}
+
+/* Naver Troubleshooting Box */
+.naver-troubleshoot-box {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: rgba(239, 231, 218, 0.55);
+  border: 1px solid rgba(168, 131, 80, 0.3);
+  border-radius: 8px;
+}
+
+.troubleshoot-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8C6D41;
+  margin: 0 0 10px 0;
+}
+
+.troubleshoot-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.troubleshoot-list strong {
+  color: var(--text-main);
+}
+
+.host-url-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  background: #FFFFFF;
+  border: 1px solid rgba(168, 131, 80, 0.35);
+  border-radius: 6px;
+}
+
+.host-url-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.host-url-code {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  color: #03C75A;
+}
+
+.btn-copy-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--gold-dark, #8C6D41);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-copy-small:hover {
+  opacity: 0.85;
+}
+
+.url-tip {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 </style>

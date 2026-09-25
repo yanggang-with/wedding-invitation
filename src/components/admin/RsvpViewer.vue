@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { rsvpList, deleteRsvpItem } from '../../services/storage'
-import { Download, Trash2, Users, Utensils, Heart } from 'lucide-vue-next'
+import { rsvpList, deleteRsvpItem, weddingInfo, adminSettings, forceUploadToCloud } from '../../services/storage'
+import { Download, Trash2, Users, Utensils, Heart, CheckSquare } from 'lucide-vue-next'
 
 const filterSide = ref<'all' | 'groom' | 'bride'>('all')
 
@@ -75,6 +75,24 @@ const handleDelete = (id: string) => {
     deleteRsvpItem(id)
   }
 }
+
+const isRsvpSectionVisible = computed(() => weddingInfo.value.showRsvp !== false)
+
+const handleToggleRsvp = async () => {
+  const nextVal = !isRsvpSectionVisible.value
+  weddingInfo.value.showRsvp = nextVal
+  adminSettings.value.showRsvpSection = nextVal
+
+  try {
+    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
+  } catch (err) {
+    console.error('Failed to toggle RSVP:', err)
+  }
+}
 </script>
 
 <template>
@@ -85,10 +103,26 @@ const handleDelete = (id: string) => {
         <p class="viewer-desc">하객들의 참석 여부와 식사 인원 현황을 실시간으로 확인합니다.</p>
       </div>
 
-      <button class="btn-secondary export-btn" @click="exportCsv">
-        <Download :size="15" />
-        <span>엑셀(CSV) 다운로드</span>
-      </button>
+      <div class="header-action-group">
+        <!-- RSVP Section Visibility Toggle -->
+        <div class="section-live-toggle-pill" :class="{ 'is-active': isRsvpSectionVisible }">
+          <CheckSquare :size="15" class="pill-icon" />
+          <span class="pill-label">청첩장 섹션 노출</span>
+          <label class="toggle-switch small">
+            <input
+              type="checkbox"
+              :checked="isRsvpSectionVisible"
+              @change="handleToggleRsvp"
+            />
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <button class="btn-secondary export-btn" @click="exportCsv">
+          <Download :size="15" />
+          <span>엑셀(CSV) 다운로드</span>
+        </button>
+      </div>
     </div>
 
     <!-- Stats Dashboard Cards -->
@@ -229,6 +263,102 @@ const handleDelete = (id: string) => {
 .viewer-desc {
   font-size: 13px;
   color: var(--text-sub);
+}
+
+.header-action-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.section-live-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-warm, #EFE7DA);
+  border: 1px solid rgba(168, 131, 80, 0.3);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.section-live-toggle-pill.is-active {
+  background: #E5F9ED;
+  border-color: #03C75A;
+}
+
+.section-live-toggle-pill .pill-icon {
+  color: var(--gold-dark, #8C6D41);
+}
+
+.section-live-toggle-pill.is-active .pill-icon {
+  color: #03C75A;
+}
+
+.pill-label {
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.toggle-switch.small {
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch.small .slider:before {
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+}
+
+.toggle-switch.small input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--border-color, #D6C7B2);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #03C75A;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
 }
 
 .export-btn {

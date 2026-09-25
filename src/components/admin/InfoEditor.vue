@@ -2,8 +2,22 @@
 import { ref, computed, watch } from 'vue'
 import { weddingInfo, formatWeddingDate } from '../../services/storage'
 import { formatPhoneNumber } from '../../utils/format'
-import { Save, Check, Calendar, Eye, MapPin, ExternalLink } from 'lucide-vue-next'
+import { Save, Check, Calendar, Eye, MapPin, ExternalLink, Copy } from 'lucide-vue-next'
 
+const currentHostUrl = computed(() => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+  return 'http://localhost:5173'
+})
+const urlCopied = ref(false)
+const copyHostUrl = () => {
+  if (navigator?.clipboard) {
+    navigator.clipboard.writeText(currentHostUrl.value)
+    urlCopied.value = true
+    setTimeout(() => { urlCopied.value = false }, 2000)
+  }
+}
 
 const handlePhoneInput = (field: 'groom' | 'bride' | 'venue', e: Event) => {
   const target = e.target as HTMLInputElement
@@ -239,8 +253,25 @@ const handleSave = () => {
               placeholder="예: ncpClientId 값 입력 (예: ab12cd34ef)"
               class="input-field font-mono"
             />
+            <div class="naver-troubleshoot-box">
+              <span class="troubleshoot-badge">💡 "네이버 인증 실패" 해결 안내</span>
+              <p class="troubleshoot-desc">
+                네이버 지도 API는 NCP 콘솔에 등록된 주소에서만 동작합니다. NCP 콘솔의 Application [수정] ➔ [Web 서비스 URL]에 아래 주소를 등록해주세요:
+              </p>
+              <div class="host-url-box">
+                <span class="host-url-label">현재 브라우저 주소:</span>
+                <code class="host-url-code">{{ currentHostUrl }}</code>
+                <button type="button" class="btn-copy-small" @click="copyHostUrl">
+                  <Check v-if="urlCopied" :size="12" class="text-green" />
+                  <Copy v-else :size="12" />
+                  <span>{{ urlCopied ? '복사됨!' : '주소 복사' }}</span>
+                </button>
+              </div>
+              <span class="url-tip">* Application 서비스 선택 시 <code>Maps > Web Dynamic Map</code>이 체크되어 있어야 합니다.</span>
+            </div>
+
             <p class="format-help">
-              * 네이버 클라우드 플랫폼(NCP) Maps에서 <code>Web Dynamic Map</code> 애플리케이션 등록 후 발급받은 <strong>Client ID</strong>를 입력하세요. 입력하고 [저장]하면 오시는 길에 네이버 지도가 실시간 반영됩니다.
+              * 네이버 클라우드 플랫폼(NCP) Maps에서 <code>Web Dynamic Map</code> 애플리케이션 등록 후 발급받은 <strong>Client ID</strong>를 입력하세요. 입력하고 상단/하단 [변경사항 저장]을 누르면 즉시 반영됩니다.
             </p>
           </div>
 
@@ -844,6 +875,77 @@ const handleSave = () => {
 
 .font-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.naver-troubleshoot-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(239, 231, 218, 0.65);
+  border: 1px solid rgba(168, 131, 80, 0.3);
+  border-radius: 6px;
+}
+
+.troubleshoot-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8C6D41;
+  margin-bottom: 4px;
+}
+
+.troubleshoot-desc {
+  font-size: 11px;
+  color: var(--text-main);
+  line-height: 1.5;
+  margin: 0 0 6px 0;
+}
+
+.host-url-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  background: #FFFFFF;
+  border: 1px solid rgba(168, 131, 80, 0.35);
+  border-radius: 6px;
+}
+
+.host-url-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.host-url-code {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  color: #03C75A;
+}
+
+.btn-copy-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: var(--gold-dark, #8C6D41);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-copy-small:hover {
+  opacity: 0.85;
+}
+
+.url-tip {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 </style>
 

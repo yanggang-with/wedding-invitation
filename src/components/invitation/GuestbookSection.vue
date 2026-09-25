@@ -195,7 +195,7 @@ const formatDate = (isoString: string) => {
 
 <style scoped>
 .guestbook-section {
-  background-color: #FFFFFF;
+  background-color: var(--section-bg, #FFFFFF);
 }
 
 .write-card {

@@ -193,8 +193,32 @@
     - **네이버지도 버튼**: 앱스토어 공식 **네이버 그린 (`#03C75A`)** 배경 + 화이트 텍스트 & 흰색 핀(그린 N 심볼) 아이콘
     - **카카오맵 버튼**: 앱스토어 공식 **카카오 옐로우 (`#FEE500`)** 배경 + 카카오 다크 (`#191919`) 텍스트 & 공식 말풍선 핀 아이콘
     - **티맵 버튼**: 앱스토어 공식 **순백색 (`#FFFFFF`)** 배경 + 다크 텍스트 + TMAP 3D 도로 루프 'T' 공식 입체 그라데이션 아이콘
+---
 
+### 18차 요청: 네이버 지도 "인증 실패" 원인 정밀 진단 및 원천 해결
+- **<인증 실패 원인 1: index.html 정적 미치환 스크립트 제거>**:
+  - `index.html`에 존재하던 `<script src="...ncpKeyId=%VITE_APP_NAVERMAP_KEY%">` 태그가 페이지 초기 진입 시 빈 키로 실행되어 네이버 API 서버에 즉시 인증 실패(Alert/에러)를 발생시키는 버그 해결 (정적 태그 제거 후 `LocationSection.vue`에서 관리자 설정 키로만 동적 주입).
+- **<인증 실패 원인 2: ncpKeyId & ncpClientId 듀얼 파라미터 규격 적용>**:
+  - `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${key}&ncpClientId=${key}` 형태로 두 파라미터를 동시에 제공하여 NCP 신구 규격 및 어떤 파서에도 100% 대응되도록 로직 강화.
+- **<인증 실패 원인 3: NCP 콘솔 Web 서비스 URL 등록 가이드 & 원클릭 복사 도구 제공>**:
+  - 네이버 지도는 NCP Application에 등록된 도메인(Web 서비스 URL)에서만 작동함(로컬 `http://localhost:5173` 및 배포 도메인).
+  - `InfoEditor.vue` 및 `AdminSettings.vue`에 현재 브라우저 주소(`window.location.origin`)를 원클릭으로 복사할 수 있는 도구와 함께 "네이버 인증 실패 해결 3단계 체크리스트"를 시각적으로 추가.
+- **<지도 렌더링 캔버스 크기 안정화>**:
+  - 지도 인스턴스 마운트 시 `window.naver.maps.Event.trigger(map, 'resize')` 트리거를 적용하여 캔버스 타일 로딩 누락 방지.
+---
 
-
-
-
+### 19차 요청: 캘린더 등록 기능 제거, 카카오맵 앱스토어 블루 핀 아이콘 반영, 참석의사(RSVP) 노출 토글 및 동적 교차 배경색 시스템
+- **<캘린더 일정 등록 기능 제거>**:
+  - `CalendarSection.vue`에서 "캘린더에 일정 등록하기" 버튼, 하단 팝업 모달, ics 파일 생성 및 구글/네이버 캘린더 연동 함수와 관련 CSS 전면 제거.
+- **<카카오맵 앱스토어 공식 아이콘 반영>**:
+  - `LocationSection.vue`의 카카오맵 버튼 내 심볼을 카카오톡 말풍선에서 **앱스토어 공식 카카오맵 블루(#0066FF) 위치 핀 (중앙 펀칭 홀 구조)** 심볼로 교체하여 카카오 옐로우 배경과 완벽 일치시킴.
+- **<참석의사전달(RSVP) 섹션 보이기/감추기 기능 추가>**:
+  - `weddingInfo.showRsvp` 및 `adminSettings.showRsvpSection` 모델 확장.
+  - 관리자 환경 설정(`AdminSettings.vue`)에 "청첩장 섹션 노출 관리" 카드 추가 및 실시간 토글 지원.
+  - 참석여부 명단 조회(`RsvpViewer.vue`) 상단에도 실시간 "청첩장 섹션 노출" 스위치 토글 추가.
+  - 토글 시 `localStorage` 및 Firebase Firestore 실시간 클라우드 동기화 지원.
+- **<섹션 동적 교차 배경색 겹침 방지 시스템 (`InvitationView.vue`)>**:
+  - 특정 섹션(RSVP, 현장스냅 등)이 숨겨졌을 때 이전/다음 섹션의 배경색(White, Ivory)이 동일하게 겹치는 문제 원천 해결.
+  - 각 섹션 컴포넌트의 루트 배경색을 `var(--section-bg, ...)`로 유연화.
+  - `InvitationView.vue`에서 현재 화면에 실제로 렌더링되는 가시 섹션 목록(`middleSectionThemes`)을 실시간 계산하여 **가시 순서에 따라 White ➔ Ivory ➔ White ➔ Ivory가 무조건 번갈아 교차 적용**되도록 구현.
+  - 하단 네비게이션도 인덱스 기반에서 `data-section` 속성 기반으로 고도화하여 어떤 섹션이 빠지더라도 정확한 위치로 스크롤 및 활성화 매핑 보장.

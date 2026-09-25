@@ -183,7 +183,7 @@ const closeModal = () => {
 
 <style scoped>
 .greeting-section {
-  background-color: #FFFFFF;
+  background-color: var(--section-bg, #FFFFFF);
 }
 
 .sub-quote {

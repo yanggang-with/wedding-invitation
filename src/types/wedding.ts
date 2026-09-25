@@ -52,6 +52,7 @@ export interface WeddingInfo {
   bgmAutoPlay: boolean
   kakaoApiKey?: string
   naverMapClientId?: string
+  showRsvp?: boolean
 }
 
 
@@ -114,6 +115,7 @@ export interface AdminSettings {
   useFirebase: boolean
   forceShowLiveSnap?: boolean
   showLiveSnapSection?: boolean
+  showRsvpSection?: boolean
   googleDriveScriptUrl?: string
   googleDriveFolderId?: string
   useGoogleDriveStorage?: boolean

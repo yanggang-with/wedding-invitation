@@ -82,11 +82,11 @@ const loadNaverMapScript = (clientId: string): Promise<boolean> => {
       script.remove()
     }
 
-    // 네이버 클라우드 플랫폼(NCP) 공식 OpenAPI 스크립트 동적 주입 (ncpKeyId 규격 적용)
+    // 네이버 클라우드 플랫폼(NCP) 공식 OpenAPI 스크립트 동적 주입 (ncpKeyId & ncpClientId 듀얼 규격 적용)
     script = document.createElement('script')
     script.id = scriptId
     script.type = 'text/javascript'
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}&ncpClientId=${encodeURIComponent(clientId)}`
     script.async = true
 
     script.onload = () => {
@@ -164,6 +164,14 @@ const renderMapInstance = () => {
       title: venue.value.name,
       animation: window.naver.maps.Animation.DROP,
     })
+
+    // 캔버스 크기 안정화를 위한 리사이즈 트리거
+    setTimeout(() => {
+      if (window.naver?.maps?.Event && currentMapInstance) {
+        window.naver.maps.Event.trigger(currentMapInstance, 'resize')
+        currentMapInstance.setCenter(position)
+      }
+    }, 150)
 
     isMapLoaded.value = true
     isMapKeyMissing.value = false
@@ -268,12 +276,16 @@ onMounted(() => {
           <span>네이버지도</span>
         </a>
 
-        <!-- 2. KakaoMap Button (App Store Kakao Yellow Background + Official Bubble Symbol) -->
+        <!-- 2. KakaoMap Button (App Store Kakao Yellow Background + Official Blue Map Pin) -->
         <a :href="kakaoNaviUrl" target="_blank" rel="noopener noreferrer" class="navi-btn kakao">
           <svg class="app-svg-icon" viewBox="0 0 32 32" width="22" height="22" fill="none">
-            <!-- Official Kakao Dark Bubble -->
-            <path d="M16 5.5C10.75 5.5 6.5 9.1 6.5 13.5C6.5 16.3 8.3 18.7 11.1 20.1L10.2 23.9C10.1 24.3 10.6 24.6 10.9 24.4L15.6 21.3C15.7 21.3 15.9 21.3 16 21.3C21.25 21.3 25.5 17.7 25.5 13.5C25.5 9.1 21.25 5.5 16 5.5Z" fill="#191919"/>
-            <circle cx="16" cy="13.5" r="3.2" fill="#FEE500"/>
+            <!-- Official KakaoMap Blue Pin with Center Cutout -->
+            <path
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+              d="M16 4C11.03 4 7 8.03 7 13C7 19.85 15.18 27.28 15.53 27.59C15.8 27.83 16.2 27.83 16.47 27.59C16.82 27.28 25 19.85 25 13C25 8.03 20.97 4 16 4ZM16 16.8C13.9 16.8 12.2 15.1 12.2 13C12.2 10.9 13.9 9.2 16 9.2C18.1 9.2 19.8 10.9 19.8 13C19.8 15.1 18.1 16.8 16 16.8Z"
+              fill="#0066FF"
+            />
           </svg>
           <span>카카오맵</span>
         </a>
@@ -340,7 +352,7 @@ onMounted(() => {
 
 <style scoped>
 .location-section {
-  background-color: var(--bg-ivory);
+  background-color: var(--section-bg, var(--bg-ivory));
 }
 
 .venue-header {

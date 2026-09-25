@@ -1188,7 +1188,7 @@ function formatRelativeTime(isoString: string): string {
 
 <style scoped>
 .livesnap-section {
-  background-color: var(--bg-ivory);
+  background-color: var(--section-bg, var(--bg-ivory));
   padding-bottom: 60px;
 }
 

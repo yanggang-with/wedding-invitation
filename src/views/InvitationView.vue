@@ -14,28 +14,73 @@ import LiveSnapSection from '../components/invitation/LiveSnapSection.vue'
 import ShareFooter from '../components/invitation/ShareFooter.vue'
 import { isStoryOpen, weddingInfo, photos, adminSettings } from '../services/storage'
 
+// --- Section Visibility & Alternating Background Color System ---
+const isRsvpVisible = computed(() => weddingInfo.value.showRsvp !== false && adminSettings.value.showRsvpSection !== false)
+const isLiveSnapVisible = computed(() => adminSettings.value.showLiveSnapSection !== false)
+
+// Cover 섹션 다음부터, 실제로 화면에 표시되는 섹션들의 배경색이 무조건 번갈아가며(White <-> Ivory) 적용되도록 계산
+const middleSectionThemes = computed(() => {
+  const candidateSections = [
+    { id: 'greeting', visible: true },
+    { id: 'calendar', visible: true },
+    { id: 'gallery', visible: true },
+    { id: 'location', visible: true },
+    { id: 'account', visible: true },
+    { id: 'rsvp', visible: isRsvpVisible.value },
+    { id: 'guestbook', visible: true },
+    { id: 'livesnap', visible: isLiveSnapVisible.value }
+  ]
+
+  let currentTheme: 'white' | 'ivory' = 'white'
+  const themeMap: Record<string, 'white' | 'ivory'> = {}
+
+  for (const item of candidateSections) {
+    if (item.visible) {
+      if (item.id === 'greeting') {
+        currentTheme = 'white'
+      } else {
+        currentTheme = currentTheme === 'white' ? 'ivory' : 'white'
+      }
+      themeMap[item.id] = currentTheme
+    }
+  }
+
+  return themeMap
+})
+
 // --- Bottom Mini Navigation Bar ---
 const navItems = [
-  { label: '홈', icon: Home, sectionIndex: 0 },
-  { label: '모시는글', icon: Heart, sectionIndex: 1 },
-  { label: '갤러리', icon: Image, sectionIndex: 3 },
-  { label: '오시는길', icon: MapPin, sectionIndex: 4 },
-  { label: '방명록', icon: MessageSquare, sectionIndex: 7 }
+  { label: '홈', icon: Home, sectionId: 'cover' },
+  { label: '모시는글', icon: Heart, sectionId: 'greeting' },
+  { label: '갤러리', icon: Image, sectionId: 'gallery' },
+  { label: '오시는길', icon: MapPin, sectionId: 'location' },
+  { label: '방명록', icon: MessageSquare, sectionId: 'guestbook' }
 ]
 
-const currentSectionIndex = ref(0)
+const currentActiveSectionId = ref('cover')
 const isNearBottom = ref(false)
 let scrollThrottle: any = null
 
-// When user reaches the last section (Share & Footer, index 9) or is near the bottom of the page
 const isAtFooter = computed(() => {
-  return currentSectionIndex.value >= 9 || isNearBottom.value
+  return currentActiveSectionId.value === 'footer' || isNearBottom.value
 })
 
 const updateCurrentSection = () => {
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
   if (!sections.length) return
-  currentSectionIndex.value = getCurrentSectionIndex(sections)
+  
+  let currentId = 'cover'
+  const threshold = window.innerHeight * 0.35
+
+  for (const sec of sections) {
+    if (sec.offsetParent === null) continue // v-show=false인 섹션 스킵
+    const rect = sec.getBoundingClientRect()
+    if (rect.top <= threshold) {
+      currentId = sec.getAttribute('data-section') || currentId
+    }
+  }
+
+  currentActiveSectionId.value = currentId
 }
 
 const checkFooterState = () => {
@@ -45,28 +90,30 @@ const checkFooterState = () => {
   isNearBottom.value = (scrollY + windowHeight >= docHeight - 140)
 }
 
-const isNavActive = (itemSectionIndex: number) => {
-  if (currentSectionIndex.value === itemSectionIndex) return true
-  if (itemSectionIndex === 1 && currentSectionIndex.value === 2) return true
-  if (itemSectionIndex === 4 && (currentSectionIndex.value === 5 || currentSectionIndex.value === 6)) return true
-  if (itemSectionIndex === 7 && currentSectionIndex.value === 8) return true
+const isNavActive = (sectionId: string) => {
+  const current = currentActiveSectionId.value
+  if (sectionId === 'cover') return current === 'cover'
+  if (sectionId === 'greeting') return current === 'greeting' || current === 'calendar'
+  if (sectionId === 'gallery') return current === 'gallery'
+  if (sectionId === 'location') return current === 'location' || current === 'account' || current === 'rsvp'
+  if (sectionId === 'guestbook') return current === 'guestbook' || current === 'livesnap' || current === 'footer'
   return false
 }
 
 const activeNavIndex = computed(() => {
-  const idx = navItems.findIndex(item => isNavActive(item.sectionIndex))
+  const idx = navItems.findIndex(item => isNavActive(item.sectionId))
   return idx !== -1 ? idx : 0
 })
 
 let isNavigatingViaClick = false
 let navClickTimer: any = null
 
-const navigateTo = (sectionIndex: number) => {
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.invitation-section-wrapper'))
-  if (sections[sectionIndex]) {
+const navigateTo = (sectionId: string) => {
+  const targetEl = document.querySelector<HTMLElement>(`.invitation-section-wrapper[data-section="${sectionId}"]`)
+  if (targetEl) {
     isNavigatingViaClick = true
-    currentSectionIndex.value = sectionIndex
-    scrollToSection(sections[sectionIndex])
+    currentActiveSectionId.value = sectionId
+    scrollToSection(targetEl)
     clearTimeout(navClickTimer)
     navClickTimer = setTimeout(() => {
       isNavigatingViaClick = false
@@ -127,20 +174,7 @@ const handleScroll = () => {
   })
 }
 
-// Section visibility calculation for bottom navigation
-const getCurrentSectionIndex = (sections: HTMLElement[]): number => {
-  let currentIndex = 0
-  const threshold = window.innerHeight * 0.35
 
-  sections.forEach((sec, idx) => {
-    const rect = sec.getBoundingClientRect()
-    if (rect.top <= threshold) {
-      currentIndex = idx
-    }
-  })
-
-  return currentIndex
-}
 
 // Smoothly scroll to target section without snapping
 const scrollToSection = (targetEl: HTMLElement) => {
@@ -185,9 +219,9 @@ const initSectionReveal = () => {
   })
 }
 
-// 현장스냅 보이기/숨기기 실시간 변경 시 Observer 재등록 및 네비게이션 갱신
+// 참석의사(RSVP) 및 현장스냅(LiveSnap) 보이기/숨기기 실시간 변경 시 Observer 재등록 및 네비게이션 갱신
 watch(
-  () => adminSettings.value.showLiveSnapSection,
+  [() => isRsvpVisible.value, () => isLiveSnapVisible.value],
   async () => {
     await nextTick()
     initSectionReveal()
@@ -195,7 +229,6 @@ watch(
     checkFooterState()
   }
 )
-
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll, { passive: true })
@@ -220,63 +253,94 @@ onUnmounted(() => {
     <BgmPlayer />
 
     <!-- 1. Cover Section -->
-    <div class="invitation-section-wrapper">
+    <div class="invitation-section-wrapper" data-section="cover">
       <CoverSection />
     </div>
 
     <!-- 2. Greeting & Contact Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="greeting"
+      :style="{ '--section-bg': middleSectionThemes['greeting'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <GreetingSection />
     </div>
 
     <!-- 3. Wedding Calendar & D-Day Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="calendar"
+      :style="{ '--section-bg': middleSectionThemes['calendar'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <CalendarSection />
     </div>
 
     <!-- 4. Wedding Photos Gallery Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="gallery"
+      :style="{ '--section-bg': middleSectionThemes['gallery'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <GallerySection />
     </div>
 
     <!-- 5. Location & Map & Navigation Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="location"
+      :style="{ '--section-bg': middleSectionThemes['location'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <LocationSection />
     </div>
 
     <!-- 6. Bank Account & Congratulatory Gift Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="account"
+      :style="{ '--section-bg': middleSectionThemes['account'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <AccountSection />
     </div>
 
-    <!-- 7. RSVP Attendance Survey Section -->
-    <div class="invitation-section-wrapper">
+    <!-- 7. RSVP Attendance Survey Section (Hidden when admin disables it) -->
+    <div
+      v-show="isRsvpVisible"
+      class="invitation-section-wrapper"
+      data-section="rsvp"
+      :class="{ 'is-visible': isRsvpVisible }"
+      :style="{ '--section-bg': middleSectionThemes['rsvp'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <RsvpSection />
     </div>
 
     <!-- 8. Guestbook Section -->
-    <div class="invitation-section-wrapper">
+    <div
+      class="invitation-section-wrapper"
+      data-section="guestbook"
+      :style="{ '--section-bg': middleSectionThemes['guestbook'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+    >
       <GuestbookSection />
     </div>
 
     <!-- 9. Live Snap Section (Hidden when admin disables it) -->
     <div
-      v-show="adminSettings.showLiveSnapSection !== false"
+      v-show="isLiveSnapVisible"
       class="invitation-section-wrapper"
-      :class="{ 'is-visible': adminSettings.showLiveSnapSection !== false }"
+      data-section="livesnap"
+      :class="{ 'is-visible': isLiveSnapVisible }"
+      :style="{ '--section-bg': middleSectionThemes['livesnap'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
     >
       <LiveSnapSection />
     </div>
 
-
     <!-- 10. Share & Footer Section -->
-    <div class="invitation-section-wrapper">
+    <div class="invitation-section-wrapper" data-section="footer">
       <ShareFooter :isAtFooter="isAtFooter" @share="handleShare" />
     </div>
 
     <!-- Floating Bottom Navigation & Share Bar (Hidden on Section 0 / Home and when Story Modal is open) -->
     <Transition name="nav-fade">
-      <div v-if="currentSectionIndex > 0 && !isStoryOpen" class="bottom-floating-bar-wrapper">
+      <div v-if="currentActiveSectionId !== 'cover' && !isStoryOpen" class="bottom-floating-bar-wrapper">
         <nav
           class="bottom-mini-nav font-sans"
           :class="{ 'is-expanded': isAtFooter }"
@@ -296,7 +360,7 @@ onUnmounted(() => {
             type="button"
             class="nav-item-btn"
             :class="{ 'is-active': activeNavIndex === idx }"
-            @click="navigateTo(item.sectionIndex)"
+            @click="navigateTo(item.sectionId)"
             :aria-label="item.label"
           >
             <component :is="item.icon" :size="15" class="nav-icon" />
@@ -329,7 +393,8 @@ onUnmounted(() => {
   width: 100%;
   box-sizing: border-box;
   opacity: 0;
-  transition: opacity 0.65s ease;
+  background-color: var(--section-bg, transparent);
+  transition: opacity 0.65s ease, background-color 0.35s ease;
   will-change: opacity;
 }
 

@@ -617,7 +617,7 @@ onUnmounted(() => {
 
 <style scoped>
 .gallery-section {
-  background-color: #FFFFFF;
+  background-color: var(--section-bg, #FFFFFF);
 }
 
 .gallery-grid {
