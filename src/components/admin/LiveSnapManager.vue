@@ -6,7 +6,8 @@ import {
   deleteLiveSnap,
   toggleLiveSnapVisibility,
   weddingInfo,
-  isWeddingDayOrLater
+  isWeddingDayOrLater,
+  forceUploadToCloud
 } from '../../services/storage'
 import type { LiveSnapItem } from '../../types/wedding'
 import {
@@ -26,12 +27,29 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  CheckSquare
 } from 'lucide-vue-next'
 import { uploadToGoogleDrive } from '../../services/storage'
 
 const showSection = ref(adminSettings.value.showLiveSnapSection !== false)
 const forceShow = ref(!!adminSettings.value.forceShowLiveSnap)
+
+const handleToggleSection = async () => {
+  adminSettings.value = {
+    ...adminSettings.value,
+    showLiveSnapSection: showSection.value
+  }
+  try {
+    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
+  } catch (err) {
+    console.error('Failed to sync live snap section visibility:', err)
+  }
+}
+
 const googleDriveScriptUrl = ref(adminSettings.value.googleDriveScriptUrl || '')
 const googleDriveFolderId = ref(adminSettings.value.googleDriveFolderId || '')
 const isTestingDrive = ref(false)
@@ -153,7 +171,22 @@ function handleDelete(id: string) {
   <div class="livesnap-manager font-sans">
     <!-- Header -->
     <div class="manager-header">
-      <h3 class="manager-title font-serif">현장 스냅 관리</h3>
+      <div class="title-with-toggle-row">
+        <h3 class="manager-title font-serif">현장 스냅 관리</h3>
+        <div class="section-live-toggle-pill" :class="{ 'is-active': showSection }">
+          <CheckSquare :size="14" class="pill-icon" />
+          <span class="pill-label">청첩장에 노출</span>
+          <span class="pill-status-text">({{ showSection ? 'ON' : 'OFF' }})</span>
+          <label class="toggle-switch small">
+            <input
+              v-model="showSection"
+              type="checkbox"
+              @change="handleToggleSection"
+            />
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
       <p class="manager-desc">
         결혼식 당일 하객들이 직접 올리는 현장 사진 및 동영상을 관리하고, 구글 드라이브(Google Drive) 저장소를 연동합니다.
       </p>
@@ -163,43 +196,10 @@ function handleDelete(id: string) {
     <div class="card-paper manager-card">
       <div class="card-title-row">
         <Sparkles :size="18" class="title-icon gold" />
-        <h4 class="card-title font-serif">현장 스냅 노출 및 테스트 모드</h4>
+        <h4 class="card-title font-serif">예식 일자 및 현장 스냅 테스트 모드</h4>
       </div>
 
-      <!-- 1) Section Visibility (Show/Hide) Switch -->
-      <div class="status-banner" :class="showSection ? 'is-active' : 'is-pending'">
-        <div class="banner-left">
-          <Eye v-if="showSection" :size="18" class="banner-icon" />
-          <EyeOff v-else :size="18" class="banner-icon" />
-          <div class="banner-text">
-            <p class="banner-title">
-              청첩장 현장스냅 섹션: <strong>{{ showSection ? '보이기 (노출)' : '숨기기 (비활성화)' }}</strong>
-            </p>
-            <p class="banner-desc">
-              {{ showSection ? '하객들이 청첩장에서 현장스냅 섹션과 업로드 기능을 볼 수 있습니다.' : '청첩장에서 현장스냅 섹션이 완전히 숨겨집니다.' }}
-            </p>
-          </div>
-        </div>
-
-        <div class="banner-right">
-          <div class="test-label-group">
-            <span class="test-title">기능 노출</span>
-            <span class="test-badge" :class="{ on: showSection }">
-              {{ showSection ? 'ON' : 'OFF' }}
-            </span>
-          </div>
-          <label class="switch">
-            <input
-              v-model="showSection"
-              type="checkbox"
-              @change="saveSettings"
-            />
-            <span class="slider round"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- 2) Wedding Date Status Banner with Test Mode Switch on Right End -->
+      <!-- Wedding Date Status Banner with Test Mode Switch on Right End -->
       <div
         class="status-banner"
         :class="isWeddingDayOrLater(weddingInfo.date, forceShow) ? 'is-active' : 'is-pending'"
@@ -554,10 +554,127 @@ function handleDelete(id: string) {
   margin-bottom: 8px;
 }
 
+.title-with-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
 .manager-title {
   font-size: 20px;
   color: var(--text-main);
-  margin-bottom: 4px;
+  margin-bottom: 0;
+}
+
+.section-live-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-warm, #EFE7DA);
+  border: 1px solid rgba(168, 131, 80, 0.3);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.section-live-toggle-pill.is-active {
+  background: #E5F9ED;
+  border-color: #03C75A;
+}
+
+.section-live-toggle-pill .pill-icon {
+  color: var(--gold-dark, #8C6D41);
+}
+
+.section-live-toggle-pill.is-active .pill-icon {
+  color: #03C75A;
+}
+
+.pill-label {
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.pill-status-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.section-live-toggle-pill.is-active .pill-status-text {
+  color: #03C75A;
+}
+
+.toggle-switch.small {
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch.small .slider:before {
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+}
+
+.toggle-switch.small input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color, #ccc);
+  transition: 0.3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+input:checked + .slider {
+  background-color: #03C75A;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }
 
 .manager-desc {

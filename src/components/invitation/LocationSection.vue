@@ -1,9 +1,35 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { weddingInfo } from '../../services/storage'
-import { MapPin, Copy, Check, Car, Train, Bus, Map as MapIcon, ExternalLink } from 'lucide-vue-next'
+import { MapPin, Copy, Check, Car, Train, Bus, Map as MapIcon, ExternalLink, Smartphone } from 'lucide-vue-next'
 
 const copied = ref(false)
+
+// Mobile Environment Detection for TMAP App Integration
+const isMobileDevice = ref(false)
+const showTmapToast = ref(false)
+let toastTimer: any = null
+
+const checkIsMobile = (): boolean => {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua)
+  const isSmallScreen = window.innerWidth <= 768
+  const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
+  return isMobileUA || (hasTouch && isSmallScreen)
+}
+
+const handleTmapClick = (e: MouseEvent) => {
+  if (!isMobileDevice.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    showTmapToast.value = true
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => {
+      showTmapToast.value = false
+    }, 3200)
+  }
+}
 
 const venue = computed(() => weddingInfo.value.venue)
 
@@ -27,7 +53,7 @@ const kakaoNaviUrl = computed(() => {
 
 const naverMapUrl = computed(() => {
   const name = encodeURIComponent(venue.value.name)
-  return `https://map.naver.com/v5/directions/-/-/${venue.value.mapLng},${venue.value.mapLat},${name}/-/transit?c=15,0,0,0,dh`
+  return `https://map.naver.com/p/search/${venue.value.address} ${name}`
 })
 
 const tmapUrl = computed(() => {
@@ -137,10 +163,14 @@ const renderMapInstance = () => {
 
     const mapOptions = {
       center: position,
-      zoom: 16,
+      zoom: 14,
       minZoom: 10,
       maxZoom: 19,
-      zoomControl: false,
+      zoomControl: true,
+      zoomControlOptions: {
+          style: window.naver.maps.ZoomControlStyle.SMALL,
+          position: window.naver.maps.Position.TOP_RIGHT
+      },
       logoControl: true,
       mapDataControl: false,
       scaleControl: false,
@@ -163,6 +193,11 @@ const renderMapInstance = () => {
       map,
       title: venue.value.name,
       animation: window.naver.maps.Animation.DROP,
+      icon: {
+        content: '<img alt="' + venue.value.name + '" src="https://map.pstatic.net/resource/api/v2/image/maps/selected-marker/229169@1x.png?version=21&amp;mapping=marker-224"><div style="font-size:11pt;font-weight:700;position:relative;margin-top:-10px">' + venue.value.name + '</div>',
+        size: new window.naver.maps.Size(38, 58),
+        anchor: new window.naver.maps.Point(19, 58),
+      },
     })
 
     // 캔버스 크기 안정화를 위한 리사이즈 트리거
@@ -201,6 +236,10 @@ watch(() => [venue.value.mapLat, venue.value.mapLng], () => {
 })
 
 onMounted(() => {
+  isMobileDevice.value = checkIsMobile()
+  window.addEventListener('resize', () => {
+    isMobileDevice.value = checkIsMobile()
+  })
   initNaverMap()
 })
 </script>
@@ -291,7 +330,14 @@ onMounted(() => {
         </a>
 
         <!-- 3. TMAP Button (App Store Pure White Background + 3D Gradient Road Loop 'T') -->
-        <a :href="tmapUrl" class="navi-btn tmap">
+        <a
+          :href="isMobileDevice ? tmapUrl : undefined"
+          class="navi-btn tmap"
+          :class="{ 'is-disabled': !isMobileDevice }"
+          :aria-disabled="!isMobileDevice"
+          :title="isMobileDevice ? '티맵 앱으로 길찾기' : '티맵은 모바일(스마트폰) 환경에서만 지원됩니다'"
+          @click="handleTmapClick"
+        >
           <svg class="app-svg-icon" viewBox="0 0 32 32" width="22" height="22" fill="none">
             <defs>
               <linearGradient id="tmapStoreGrad" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
@@ -305,11 +351,31 @@ onMounted(() => {
             <path d="M7 8C7 6.9 7.9 6 9 6H23C24.1 6 25 6.9 25 8C25 9.1 24.1 10 23 10H18.5V23C18.5 24.1 17.6 25 16.5 25C15.4 25 14.5 24.1 14.5 23V10H9C7.9 10 7 9.1 7 8Z" fill="url(#tmapStoreGrad)"/>
             <circle cx="22.5" cy="7.5" r="2.2" fill="#FF2A6D"/>
           </svg>
-          <span>티맵</span>
+          <span class="btn-label-group">
+            <span>티맵</span>
+            <span v-if="!isMobileDevice" class="mobile-only-tag">모바일 전용</span>
+          </span>
         </a>
       </div>
 
+      <!-- Non-Mobile Notice Banner for TMAP -->
+      <div v-if="!isMobileDevice" class="tmap-pc-notice font-sans">
+        <Smartphone :size="13" class="notice-icon" />
+        <span class="notice-text">
+          <strong>티맵(TMAP)</strong>은 스마트폰 앱 전용입니다. PC에서는 <strong>네이버지도</strong> 또는 <strong>카카오맵</strong>을 이용해 주세요.
+        </span>
+      </div>
 
+      <!-- TMAP Click Toast Notification on PC -->
+      <Transition name="toast-pop">
+        <div v-if="showTmapToast" class="tmap-toast-box font-sans">
+          <Smartphone :size="15" class="toast-phone-icon" />
+          <div class="toast-content">
+            <strong class="toast-main">티맵(TMAP)은 모바일 전용 기능입니다</strong>
+            <span class="toast-sub">스마트폰에서 접속하시거나 PC에서는 네이버지도/카카오맵을 이용해 주세요.</span>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- Transport Details Card -->
@@ -448,6 +514,7 @@ onMounted(() => {
 
 /* Map Card */
 .map-card {
+  position: relative;
   padding: 12px;
   margin-bottom: 18px;
 }
@@ -616,10 +683,135 @@ onMounted(() => {
   border: 1px solid rgba(0, 0, 0, 0.12);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
 }
-.navi-btn.tmap:hover {
+.navi-btn.tmap:hover:not(.is-disabled) {
   background-color: #FBFBFB;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.09);
   border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* TMAP Disabled on Non-Mobile Environments */
+.navi-btn.tmap.is-disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  background-color: #F8F8F8;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: none;
+  filter: grayscale(25%);
+}
+
+.navi-btn.tmap.is-disabled:hover {
+  transform: none;
+  background-color: #F8F8F8;
+  box-shadow: none;
+}
+
+.navi-btn.tmap.is-disabled:active {
+  transform: none;
+}
+
+.btn-label-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.mobile-only-tag {
+  font-size: 8.5px;
+  font-weight: 600;
+  color: #8C6D41;
+  background: rgba(168, 131, 80, 0.12);
+  padding: 1px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* TMAP Desktop Notice Banner */
+.tmap-pc-notice {
+  margin-top: 10px;
+  padding: 9px 12px;
+  background: rgba(239, 231, 218, 0.65);
+  border: 1px solid rgba(168, 131, 80, 0.28);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.notice-icon {
+  color: var(--gold-dark, #8C6D41);
+  flex-shrink: 0;
+}
+
+.notice-text {
+  font-size: 11.5px;
+  color: var(--text-sub);
+  line-height: 1.45;
+}
+
+.notice-text strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* TMAP Toast Notification */
+.tmap-toast-box {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  background: rgba(30, 30, 30, 0.95);
+  color: #FFFFFF;
+  padding: 12px 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-align: left;
+}
+
+.toast-phone-icon {
+  color: #FF5A5F;
+  flex-shrink: 0;
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toast-main {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.toast-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.4;
+}
+
+/* Toast Transitions */
+.toast-pop-enter-active,
+.toast-pop-leave-active {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-pop-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+}
+
+.toast-pop-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
 }
 
 .app-svg-icon {

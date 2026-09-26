@@ -8,7 +8,7 @@ const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
 const isMoreLoading = ref(false)
 const isInitialLoading = ref(true)
-const INITIAL_COUNT = 6
+const INITIAL_COUNT = 9
 
 // --- Thumbnail Loading Delay Optimization ---
 const loadedThumbnails = ref<Record<string, boolean>>({})
@@ -50,6 +50,24 @@ let touchStartX = 0
 let touchStartY = 0
 let isLongPressActive = false
 
+const preventDefaultTouchMove = (e: TouchEvent) => {
+  if (isPeeking.value && e.cancelable) {
+    e.preventDefault()
+  }
+}
+
+const closePeek = () => {
+  clearTimeout(peekTimer)
+  if (isPeeking.value) {
+    isPeeking.value = false
+    peekPhoto.value = null
+    if (selectedIndex.value === null && !isStoryOpen.value) {
+      document.body.style.overflow = ''
+    }
+    window.removeEventListener('touchmove', preventDefaultTouchMove)
+  }
+}
+
 const handleThumbnailTouchStart = (photo: PhotoItem, e: TouchEvent) => {
   if (!e.touches.length) return
   touchStartX = e.touches[0].clientX
@@ -62,6 +80,11 @@ const handleThumbnailTouchStart = (photo: PhotoItem, e: TouchEvent) => {
     isPeekImageLoaded.value = false
     peekPhoto.value = photo
     isPeeking.value = true
+
+    // 롱프레스 픽(Peek) 모달 활성화 시 뒷 배경 div 및 바디 스크롤 차단
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('touchmove', preventDefaultTouchMove, { passive: false })
+
     if ('vibrate' in navigator) {
       try {
         navigator.vibrate(35)
@@ -72,9 +95,16 @@ const handleThumbnailTouchStart = (photo: PhotoItem, e: TouchEvent) => {
 
 const handleThumbnailTouchMove = (e: TouchEvent) => {
   if (!e.touches.length) return
+  // 이미 픽 모달이 뜬 상태에서 터치 이동 시 뒷배경 스크롤 방지
+  if (isPeeking.value) {
+    if (e.cancelable) {
+      e.preventDefault()
+    }
+    return
+  }
   const touch = e.touches[0]
   const dist = Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY)
-  if (dist > 12) {
+  if (dist > 10) {
     clearTimeout(peekTimer)
   }
 }
@@ -82,9 +112,10 @@ const handleThumbnailTouchMove = (e: TouchEvent) => {
 const handleThumbnailTouchEnd = (e: TouchEvent) => {
   clearTimeout(peekTimer)
   if (isPeeking.value) {
-    isPeeking.value = false
-    peekPhoto.value = null
-    e.preventDefault()
+    closePeek()
+    if (e.cancelable) {
+      e.preventDefault()
+    }
   }
 }
 
@@ -381,6 +412,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('popstate', handlePopState)
+  window.removeEventListener('touchmove', preventDefaultTouchMove)
   stopProgressAnim()
   clearTimeout(holdTimer)
   clearTimeout(peekTimer)
@@ -424,6 +456,7 @@ onUnmounted(() => {
           :src="photo.thumbnailUrl || getOptimizedImageUrl(photo.url, 240, 60)"
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
+          :style="{ objectPosition: photo.objectPosition || 'center center' }"
           :class="{ 'is-loaded': loadedThumbnails[photo.id] && !isInitialLoading && (!isMoreLoading || index < INITIAL_COUNT) }"
           :loading="index < INITIAL_COUNT ? 'eager' : 'lazy'"
           :fetchpriority="index < INITIAL_COUNT ? 'high' : 'auto'"

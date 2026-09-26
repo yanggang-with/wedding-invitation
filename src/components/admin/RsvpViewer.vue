@@ -99,25 +99,26 @@ const handleToggleRsvp = async () => {
   <div class="rsvp-viewer font-sans">
     <div class="viewer-header">
       <div>
-        <h3 class="viewer-title font-serif">참석 여부 (RSVP) 명단 조회</h3>
+        <div class="title-with-toggle-row">
+          <h3 class="viewer-title font-serif">참석 여부 (RSVP) 명단 조회</h3>
+          <div class="section-live-toggle-pill" :class="{ 'is-active': isRsvpSectionVisible }">
+            <CheckSquare :size="14" class="pill-icon" />
+            <span class="pill-label">청첩장에 노출</span>
+            <span class="pill-status-text">({{ isRsvpSectionVisible ? 'ON' : 'OFF' }})</span>
+            <label class="toggle-switch small">
+              <input
+                type="checkbox"
+                :checked="isRsvpSectionVisible"
+                @change="handleToggleRsvp"
+              />
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
         <p class="viewer-desc">하객들의 참석 여부와 식사 인원 현황을 실시간으로 확인합니다.</p>
       </div>
 
       <div class="header-action-group">
-        <!-- RSVP Section Visibility Toggle -->
-        <div class="section-live-toggle-pill" :class="{ 'is-active': isRsvpSectionVisible }">
-          <CheckSquare :size="15" class="pill-icon" />
-          <span class="pill-label">청첩장 섹션 노출</span>
-          <label class="toggle-switch small">
-            <input
-              type="checkbox"
-              :checked="isRsvpSectionVisible"
-              @change="handleToggleRsvp"
-            />
-            <span class="slider round"></span>
-          </label>
-        </div>
-
         <button class="btn-secondary export-btn" @click="exportCsv">
           <Download :size="15" />
           <span>엑셀(CSV) 다운로드</span>
@@ -254,10 +255,18 @@ const handleToggleRsvp = async () => {
   margin-bottom: 24px;
 }
 
+.title-with-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .viewer-title {
   font-size: 20px;
   color: var(--text-main);
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .viewer-desc {
@@ -301,6 +310,16 @@ const handleToggleRsvp = async () => {
 .pill-label {
   font-weight: 500;
   font-size: 12.5px;
+}
+
+.pill-status-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.section-live-toggle-pill.is-active .pill-status-text {
+  color: #03C75A;
 }
 
 .toggle-switch.small {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { guestbook, addGuestbookEntry, deleteGuestbookEntry } from '../../services/storage'
+import { checkProfanity } from '../../utils/filter'
 import { Send, Trash2, Heart, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 const author = ref('')
@@ -38,6 +39,14 @@ const goToPage = (page: number) => {
 const handleAddComment = () => {
   if (!author.value.trim() || !message.value.trim()) {
     alert('작성자 성함과 축하 메시지를 모두 입력해 주세요.')
+    return
+  }
+
+  // 비속어 및 악담 필터링 검사
+  const combinedText = `${author.value} ${message.value}`
+  const profanityResult = checkProfanity(combinedText)
+  if (profanityResult.containsProfanity) {
+    alert('따뜻한 축하의 마음을 담아 바르고 고운 말을 사용해 주세요. (부적절하거나 비방하는 단어가 감지되었습니다.)')
     return
   }
 
@@ -196,12 +205,16 @@ const formatDate = (isoString: string) => {
 <style scoped>
 .guestbook-section {
   background-color: var(--section-bg, #FFFFFF);
+  transition: background-color 0.3s ease;
 }
 
 .write-card {
   margin-top: 24px;
   padding: 20px 18px;
   text-align: left;
+  background: var(--card-bg, #FFFFFF);
+  border: 1px solid var(--border-light);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .form-row {
@@ -216,9 +229,10 @@ const formatDate = (isoString: string) => {
   border-radius: 8px;
   border: 1px solid var(--border-color);
   font-size: 13px;
-  background: var(--bg-ivory);
+  background: var(--input-bg, var(--bg-ivory));
   color: var(--text-main);
   outline: none;
+  transition: background-color 0.3s ease, border-color 0.2s ease;
 }
 
 .input-field.half {
@@ -252,10 +266,11 @@ const formatDate = (isoString: string) => {
 }
 
 .comment-card {
-  background: var(--bg-ivory);
+  background: var(--card-bg, var(--bg-ivory));
   border: 1px solid var(--border-light);
   border-radius: 12px;
   padding: 16px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .comment-header {
@@ -383,4 +398,3 @@ const formatDate = (isoString: string) => {
   box-shadow: 0 2px 6px rgba(168, 131, 80, 0.25);
 }
 </style>
-

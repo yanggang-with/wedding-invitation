@@ -222,3 +222,93 @@
   - 각 섹션 컴포넌트의 루트 배경색을 `var(--section-bg, ...)`로 유연화.
   - `InvitationView.vue`에서 현재 화면에 실제로 렌더링되는 가시 섹션 목록(`middleSectionThemes`)을 실시간 계산하여 **가시 순서에 따라 White ➔ Ivory ➔ White ➔ Ivory가 무조건 번갈아 교차 적용**되도록 구현.
   - 하단 네비게이션도 인덱스 기반에서 `data-section` 속성 기반으로 고도화하여 어떤 섹션이 빠지더라도 정확한 위치로 스크롤 및 활성화 매핑 보장.
+
+---
+
+### 20차 요청: 방명록 실시간 동기화 & 비속어 필터, 갤러리 1:1 얼굴 초점 크롭, 관리자 노출 토글 디자인 통합
+- **<방명록 관리 실시간 삭제 및 노출/미노출 반영 (`GuestbookModerator.vue`, `storage.ts`)>**:
+  - `storage.ts`에 `toggleGuestbookVisibility(id)` 함수를 추가하여 로컬 상태뿐만 아니라 Firestore `saveGuestbookDoc(item)`을 즉시 실행.
+  - `deleteGuestbookEntry` 삭제 시 로컬스토리지 갱신 및 Firestore `deleteGuestbookDoc(id)` 실시간 발행.
+  - `subscribeGuestbook` 구독 콜백의 배열 길이 가드를 완화하여 모든 데이터 삭제나 상태 변경 시 즉시 모든 하객 및 관리자 화면에 실시간 동기화되도록 개선.
+- **<방명록 섹션 카드 배경색 동적 대비 전환 (`InvitationView.vue`, `GuestbookSection.vue`)>**:
+  - `InvitationView.vue`에서 방명록 섹션의 배경색(White vs Ivory)에 맞춰 반대되는 `--card-bg` 및 `--input-bg` CSS 변수를 하위로 주입.
+  - 방명록 작성 카드(`.write-card`), 입력창(`.input-field`), 방명록 피드 카드(`.comment-card`)가 섹션 배경색 전환 시 반대색으로 자동 전환되어 최적의 시각적 가독성과 대비 유지.
+- **<방명록 비속어 및 악담 입력 방지 필터링 (`filter.ts`, `GuestbookSection.vue`)>**:
+  - 욕설, 비하어, 음란 단어 및 결혼식에 부적절한 악담/저주/비방 키워드를 감지하는 `checkProfanity` 유틸리티 함수 구현 (`src/utils/filter.ts`).
+  - 공백이나 특수문자로 우회하는 경우(`시.발`, `이 혼`, `개-새-끼` 등)까지 정규식으로 감지.
+  - 방명록 제출 시 비속어 감지 시 친절하고 정중한 안내창과 함께 저장을 자동 차단.
+- **<갤러리 1:1 정사각형 썸네일 얼굴 초점 위치 맞춤 저장 (`PhotoItem`, `PhotoManager.vue`, `GallerySection.vue`)>**:
+  - `PhotoItem` 모델에 `objectPosition?: string` (예: `50% 20%`) 필드 추가.
+  - 관리자 사진 관리 탭에 **"1:1 썸네일 위치 맞춤" 인터랙티브 모달** 구현.
+    - 원본 사진 위에서 클릭/터치/드래그하여 신랑/신부의 얼굴 위치를 타겟팅(십자선 레티클 및 펄스 링 UI).
+    - [얼굴/상단 (20%)], [상단-중간 (35%)], [정중앙 (50%)], [하단 (75%)] 원클릭 프리셋 및 미세조정 슬라이더 제공.
+    - 청첩장 3x3 갤러리에 노출될 **실제 1:1 정사각형 썸네일 실시간 라이브 미리보기** 제공.
+    - 사진 정보 수정 모달 및 사진 카드 오버레이/액션바에서 간편 접근 지원.
+    - `GallerySection.vue`의 3x3 썸네일에 `:style="{ objectPosition: photo.objectPosition || 'center center' }"` 바인딩을 적용하여 잘림 없는 최적의 구도 완성.
+- **<관리자 참석여부 & 현장스냅 섹션 노출 토글 디자인 통합 (`RsvpViewer.vue`, `LiveSnapManager.vue`)>**:
+  - `RsvpViewer.vue`와 `LiveSnapManager.vue`의 제목(`<h3>`) 바로 뒤에 `[청첩장에 노출 (ON/OFF)]` 스타일의 미니 알약(Pill) 토글 스위치 디자인을 통일하여 배치.
+  - 스위치 변경 시 즉시 로컬 저장 및 Firestore 클라우드 동기화 트리거 연동.
+- **<예식 일시/장소 탭 "네이버 인증 실패" 안내 박스 정리 (`InfoEditor.vue`)>**:
+  - `InfoEditor.vue`에서 중복 노출되던 💡 "네이버 인증 실패" 해결 안내 박스 및 관련 미사용 함수/스타일 깔끔하게 제거 (`AdminSettings.vue`의 정규 안내 박스로 통합).
+
+---
+
+### 21차 요청: 연락처 보기 모달 팝업 잘림 해결 (Teleport & Popstate) 및 현장스냅 중복 노출 토글 정리
+- **<연락처 보기 모달 팝업 잘림 및 스태킹 컨텍스트 분리 (`GreetingSection.vue`)>**:
+  - 인삿말 섹션(`GreetingSection.vue`)의 축하 연락처 모달을 `<Teleport to="body">`로 래핑하여 섹션 래퍼의 `opacity` / 스태킹 컨텍스트 및 후속 섹션(캘린더, 갤러리, 지도 등)에 의해 잘리거나 덮이는 현상 원천 해결.
+  - 모달 오버레이 `z-index`를 `9999`로 상향 및 `-webkit-backdrop-filter` 적용.
+  - 모달 오픈 시 배경 스크롤 잠금(`document.body.style.overflow = 'hidden'`) 처리.
+  - 모바일 뒤로가기(`popstate`) 시 페이지 이탈 없이 연락처 모달만 닫히도록 `history.pushState` 연동 및 직전 스크롤 위치(`savedScrollY`) 오차 없는 복원 연동.
+- **<관리자 현장스냅 탭 중복 청첩장 노출 스위치 제거 (`LiveSnapManager.vue`)>**:
+  - 제목 바로 옆으로 통합된 `[청첩장에 노출 (ON/OFF)]` 알약 토글 스위치만 남기고, 하단 '현장 스냅 노출 및 테스트 모드' 카드 내부에 중복 노출되던 구형 상태 배너 스위치를 깔끔히 제거.
+  - 카드 타이틀을 `예식 일자 및 현장 스냅 테스트 모드`로 정리하여 시각적 직관성 확보.
+
+---
+
+### 22차 요청: 오시는 길 지도 티맵(TMAP) 비모바일 비활성화 및 모바일 전용 안내 표기
+- **<모바일 기기 환경 정밀 감지 (`LocationSection.vue`)>**:
+  - `UserAgent` 정규식 검사(Android, iOS, CriOS 등) 및 터치 포인트/화면 너비 복합 검사를 통해 실제 스마트폰/모바일 환경 여부(`isMobileDevice`)를 정확히 판별.
+  - 브라우저 창 크기 변경(`resize`) 시에도 실시간으로 반응하도록 이벤트 리스너 등록.
+- **<비모바일(PC) 환경 티맵 버튼 비활성화 UI/UX>**:
+  - PC 환경 감지 시 티맵 버튼에 `.is-disabled` 클래스 및 `:href="undefined"`, `aria-disabled="true"` 적용.
+  - 비활성화 비주얼(그레이스케일, 투명도 58%, `cursor: not-allowed`, 호버 효과 차단) 적용 및 버튼 내 `[모바일 전용]` 서브 배지 표기.
+- **<모바일 전용 안내 문구 및 인터랙티브 토스트 팝업>**:
+  - 길찾기 3개 버튼 하단에 **"티맵(TMAP)은 스마트폰 앱 전용입니다. PC에서는 네이버지도 또는 카카오맵을 이용해 주세요."** 상시 안내 배너 표기.
+  - PC 사용자가 티맵 버튼을 클릭했을 시, 길찾기 딥링크를 차단하고 **"티맵(TMAP)은 모바일 전용 기능입니다. 스마트폰에서 접속하시거나 PC에서는 네이버지도/카카오맵을 이용해 주세요."** 플로팅 토스트 팝업을 노출하여 친절하게 안내.
+
+---
+
+### 23차 요청: 청첩장 및 관리자 페이지 파비콘(Favicon) 맞춤 제작 및 동적 분기
+- **<결혼식 청첩장 맞춤 파비콘 제작 (`public/favicon.svg`, `public/favicon-wedding.svg`)>**:
+  - 소프트 아이보리 서클 베이스(`#FFFFFF` ~ `#F8F3EA`)에 샴페인 골드 테두리 적용.
+  - 두 사람의 영원한 사랑과 결합을 상징하는 두 개의 연결된 골드 웨딩 링(Interlocking Gold Rings) 디자인.
+  - 신부 링 상단에 빛나는 다이아몬드 젬스톤(Diamond Gem)과 주변 반짝임(Sparkle) 스파클 효과.
+  - 링 교차 지점에 로맨틱한 로즈 핑크 하트 악센트 배치로 작은 탭 아이콘(16x16 / 32x32)에서도 선명하고 고급스럽게 표현.
+- **<관리자 페이지 차별화 파비콘 제작 (`public/favicon-admin.svg`)>**:
+  - 청첩장의 골드 웨딩 링 모티브를 계승하면서도 관리/설정 페이지임을 즉각 인지할 수 있도록 차별화.
+  - 고급스러운 다크 네이비/슬레이트 원형 배경(`#1E2738` ~ `#0E131F`)에 골드 림 테두리.
+  - 골드 웨딩 링 베이스와 함께 전면에 정교한 8개 톱니의 골드 기어(Admin Settings Gear) 배지 및 실시간 라이브 그린 인디케이터 도트 배치.
+- **<HTML 메타 태그 및 동적 파비콘 라우터 연동 (`index.html`, `src/router/index.ts`)>**:
+  - `index.html`에 `<link rel="icon" type="image/svg+xml" id="dynamic-favicon" href="./favicon.svg" />` 표준 태그 등록.
+  - `src/router/index.ts`의 `afterEach` 훅에 `updateFavicon()` 유틸 함수를 구축:
+    - `/admin` 경로 진입 시 `favicon-admin.svg`로 실시간 전환.
+    - 일반 청첩장 메인(`/`) 진입 시 `favicon.svg` (웨딩 링)로 실시간 전환.
+  - `scripts/sync-assets.cjs`에 파비콘 파일들을 루트(`root/`)와 빌드 산출물(`dist/`) 양쪽에 자동 동기화하도록 빌드 파이프라인 보완.
+
+---
+
+### 24차 요청: 갤러리 섹션 초기 표시 이미지 개수 9개(3x3) 확장
+- **<갤러리 섹션 초기 노출 사진 수 9개로 상향 (`GallerySection.vue`)>**:
+  - 기존 `INITIAL_COUNT = 6` (2행 6장)에서 `INITIAL_COUNT = 9` (3행 3열 9장)으로 변경.
+  - 3열 그리드 레이아웃의 비어 있던 마지막 행을 채워 완전한 3x3 정사각형 그리드 완성.
+  - 초기 9장 모두 고우선순위 로딩(`eager`, `fetchpriority="high"`) 적용.
+  - 등록된 사진이 9개 이하일 때는 '사진 더보기' 버튼이 자연스럽게 숨겨지고, 9개 초과 시 남은 사진 개수(`remainingPhotosCount`)에 맞춰 더보기 버튼 노출.
+
+---
+
+### 25차 요청: 갤러리 롱프레스 픽(Peek) 모달 시 뒷 배경 스크롤 방지
+- **<모바일 터치 타깃 캡처 및 터치 이동 스크롤 완벽 차단 (`GallerySection.vue`)>**:
+  - 모바일 브라우저의 터치 이벤트 타깃 고정(Touch Target Locking) 특성으로 인해 텔레포트 오버레이가 생성되어도 최초 터치된 `.thumbnail-card`로 터치 이동 스트림이 계속 유입되는 문제 해결.
+  - `handleThumbnailTouchMove`에서 `isPeeking.value === true` 상태일 때 `e.cancelable && e.preventDefault()`를 즉시 호출하여 브라우저의 제스처 스크롤 차단.
+  - 롱프레스 인식 시점(320ms 경과)에 `document.body.style.overflow = 'hidden'` 적용 및 `window.addEventListener('touchmove', preventDefaultTouchMove, { passive: false })`를 브라우저 윈도우 최상위 레벨에 등록하여 손가락을 상하좌우로 움직여도 배경 div/페이지가 절대 스크롤되지 않도록 원천 잠금.
+  - 롱프레스 종료(`handleThumbnailTouchEnd`, `closePeek`) 및 컴포넌트 언마운트(`onUnmounted`) 시 `body.overflow = ''` 및 `touchmove` 리스너를 완벽하게 해제/정리.

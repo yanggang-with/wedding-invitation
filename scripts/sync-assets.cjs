@@ -18,6 +18,18 @@ if (fs.existsSync(distAssets)) {
   }
 }
 
+// 1-1. Copy public favicons to root directory
+const publicDir = path.join(rootDir, 'public')
+if (fs.existsSync(publicDir)) {
+  const publicFiles = fs.readdirSync(publicDir)
+  for (const file of publicFiles) {
+    if (file.startsWith('favicon')) {
+      fs.copyFileSync(path.join(publicDir, file), path.join(rootDir, file))
+      console.log(`Synced ${file} to root/`)
+    }
+  }
+}
+
 // 2. Copy and transform root index.html to dist/index.html (substituting %VITE_...% env variables)
 const indexHtmlPath = path.join(rootDir, 'index.html')
 if (fs.existsSync(indexHtmlPath)) {

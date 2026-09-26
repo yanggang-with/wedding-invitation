@@ -7,6 +7,7 @@ export interface PhotoItem {
   isHidden?: boolean
   order: number
   createdAt: string
+  objectPosition?: string // e.g. "50% 20%"
 }
 
 export interface PersonInfo {

@@ -34,7 +34,9 @@ import {
   EyeOff,
   Cloud,
   Settings,
-  AlertCircle
+  AlertCircle,
+  Crop,
+  Target
 } from 'lucide-vue-next'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -136,9 +138,102 @@ const editForm = ref({
   url: '',
   caption: '',
   isCover: false,
-  isHidden: false
+  isHidden: false,
+  objectPosition: '50% 50%'
 })
 const isReplacingImage = ref(false)
+
+// 1:1 Thumbnail Focus Positioning State
+const isFocusModalOpen = ref(false)
+const focusPhoto = ref<PhotoItem | null>(null)
+const focusX = ref(50)
+const focusY = ref(50)
+const focusContainerRef = ref<HTMLElement | null>(null)
+const isFocusDragging = ref(false)
+
+const openFocusModal = (photo: PhotoItem) => {
+  focusPhoto.value = photo
+  if (photo.objectPosition) {
+    const parts = photo.objectPosition.split(' ')
+    if (parts.length === 2) {
+      focusX.value = parseFloat(parts[0]) || 50
+      focusY.value = parseFloat(parts[1]) || 50
+    } else {
+      focusX.value = 50
+      focusY.value = 50
+    }
+  } else {
+    focusX.value = 50
+    focusY.value = 50
+  }
+  isFocusModalOpen.value = true
+}
+
+const openFocusModalFromEdit = () => {
+  if (!editingPhoto.value) return
+  openFocusModal(editingPhoto.value)
+}
+
+const closeFocusModal = () => {
+  isFocusModalOpen.value = false
+  focusPhoto.value = null
+  isFocusDragging.value = false
+}
+
+const setFocusPreset = (x: number, y: number) => {
+  focusX.value = x
+  focusY.value = y
+}
+
+const updateFocusFromEvent = (e: MouseEvent | Touch) => {
+  if (!focusContainerRef.value) return
+  const rect = focusContainerRef.value.getBoundingClientRect()
+  const rawX = ((e.clientX - rect.left) / rect.width) * 100
+  const rawY = ((e.clientY - rect.top) / rect.height) * 100
+  focusX.value = Math.max(0, Math.min(100, Math.round(rawX)))
+  focusY.value = Math.max(0, Math.min(100, Math.round(rawY)))
+}
+
+const handleFocusContainerClick = (e: MouseEvent) => {
+  updateFocusFromEvent(e)
+}
+
+const startFocusDrag = (e: MouseEvent | TouchEvent) => {
+  isFocusDragging.value = true
+  const event = 'touches' in e ? e.touches[0] : e
+  updateFocusFromEvent(event)
+
+  const onMove = (moveEvt: MouseEvent | TouchEvent) => {
+    if (!isFocusDragging.value) return
+    const evt = 'touches' in moveEvt ? moveEvt.touches[0] : moveEvt
+    updateFocusFromEvent(evt)
+  }
+
+  const onEnd = () => {
+    isFocusDragging.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onEnd)
+    window.removeEventListener('touchmove', onMove)
+    window.removeEventListener('touchend', onEnd)
+  }
+
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onEnd)
+  window.addEventListener('touchmove', onMove)
+  window.addEventListener('touchend', onEnd)
+}
+
+const saveFocusPosition = () => {
+  if (!focusPhoto.value) return
+  const pos = `${focusX.value}% ${focusY.value}%`
+  updatePhotoItem(focusPhoto.value.id, {
+    objectPosition: pos
+  })
+  if (editForm.value.id === focusPhoto.value.id) {
+    editForm.value.objectPosition = pos
+  }
+  closeFocusModal()
+}
 
 // Unified Drag State (PC Mouse & Mobile Touch)
 const isDragging = ref(false)
@@ -222,7 +317,8 @@ const openEditModal = (photo: PhotoItem) => {
     url: photo.url,
     caption: photo.caption || '',
     isCover: !!photo.isCover,
-    isHidden: !!photo.isHidden
+    isHidden: !!photo.isHidden,
+    objectPosition: photo.objectPosition || '50% 50%'
   }
   isEditModalOpen.value = true
 }
@@ -276,7 +372,8 @@ const saveEditModal = () => {
     url: editForm.value.url.trim(),
     caption: editForm.value.caption.trim(),
     isCover: isCoverPhoto,
-    isHidden: isCoverPhoto ? false : editForm.value.isHidden
+    isHidden: isCoverPhoto ? false : editForm.value.isHidden,
+    objectPosition: editForm.value.objectPosition
   })
   if (isCoverPhoto) {
     setCoverPhotoItem(editForm.value.id)
@@ -584,6 +681,7 @@ onUnmounted(() => {
             :alt="photo.caption || '웨딩 사진'"
             class="photo-thumb"
             :class="{ 'is-loaded': loadedAdminThumbs[photo.id] }"
+            :style="{ objectPosition: photo.objectPosition || 'center center' }"
             draggable="false"
             loading="lazy"
             decoding="async"
@@ -618,6 +716,10 @@ onUnmounted(() => {
             <button class="overlay-btn edit-btn" @click="openEditModal(photo)" title="사진 수정">
               <Edit3 :size="14" />
               <span>수정</span>
+            </button>
+            <button class="overlay-btn crop-btn" @click.stop="openFocusModal(photo)" title="1:1 썸네일 위치 맞춤 (얼굴 잘림 방지)">
+              <Crop :size="14" />
+              <span>1:1 맞춤</span>
             </button>
             <!-- 대표 사진은 숨김 불가 -->
             <button
@@ -687,6 +789,10 @@ onUnmounted(() => {
                 <Star :size="12" fill="currentColor" />
                 <span>대표</span>
               </span>
+
+              <button class="icon-crop-btn" @click.stop="openFocusModal(photo)" title="1:1 썸네일 노출 위치 맞춤">
+                <Crop :size="12" />
+              </button>
 
               <button class="icon-edit-btn" @click="openEditModal(photo)" title="사진 수정">
                 <Edit3 :size="12" />
@@ -788,6 +894,29 @@ onUnmounted(() => {
             />
           </div>
 
+          <div class="form-group">
+            <label class="form-label">1:1 썸네일 노출 위치 (얼굴 잘림 방지)</label>
+            <div class="thumb-pos-card">
+              <div class="mini-1-1-preview-wrap">
+                <img
+                  :src="editForm.url"
+                  alt="1:1 미리보기"
+                  class="mini-1-1-img"
+                  :style="{ objectPosition: editForm.objectPosition || 'center center' }"
+                />
+                <span class="preview-tag">1:1 미리보기</span>
+              </div>
+              <div class="thumb-pos-info">
+                <p class="pos-text">현재 설정: <strong>{{ editForm.objectPosition || '50% 50%' }}</strong></p>
+                <p class="pos-help">청첩장 3x3 썸네일에서 얼굴이 잘리지 않도록 초점 위치를 조정합니다.</p>
+                <button type="button" class="btn-secondary btn-sm" @click="openFocusModalFromEdit">
+                  <Crop :size="13" />
+                  <span>1:1 위치 맞춤 조정하기</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group checkbox-group">
             <label class="checkbox-label">
               <input
@@ -822,6 +951,151 @@ onUnmounted(() => {
           <button class="btn-primary" @click="saveEditModal">
             <Check :size="14" />
             <span>저장하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1:1 Thumbnail Focus Positioning Modal -->
+    <div v-if="isFocusModalOpen && focusPhoto" class="modal-backdrop focus-modal-backdrop" @click.self="closeFocusModal">
+      <div class="modal-card focus-modal-card card-paper">
+        <div class="modal-header">
+          <div>
+            <h4 class="modal-title font-serif">1:1 썸네일 노출 위치 맞춤</h4>
+            <p class="modal-subtitle">얼굴이 잘리지 않도록 1:1 정사각형 썸네일의 중심 초점을 맞춰주세요.</p>
+          </div>
+          <button class="close-btn" @click="closeFocusModal">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <div class="modal-body focus-modal-body">
+          <div class="focus-layout">
+            <!-- Left: Original Image with Interactive Focus Target -->
+            <div class="focus-editor-col">
+              <div class="col-header">
+                <Target :size="15" class="col-icon" />
+                <span class="col-title">사진을 클릭하거나 터치하여 얼굴 위치를 지정하세요</span>
+              </div>
+
+              <div
+                ref="focusContainerRef"
+                class="focus-image-container"
+                @click="handleFocusContainerClick"
+                @mousedown="startFocusDrag"
+                @touchstart="startFocusDrag"
+              >
+                <img
+                  :src="focusPhoto.url"
+                  alt="초점 조정 원본 사진"
+                  class="focus-target-img"
+                  draggable="false"
+                />
+
+                <!-- Focus Reticle Target -->
+                <div
+                  class="focus-reticle"
+                  :style="{ left: `${focusX}%`, top: `${focusY}%` }"
+                >
+                  <div class="reticle-outer-ring"></div>
+                  <div class="reticle-cross-h"></div>
+                  <div class="reticle-cross-v"></div>
+                  <div class="reticle-center-dot"></div>
+                  <span class="reticle-badge">초점 ({{ focusX }}%, {{ focusY }}%)</span>
+                </div>
+              </div>
+
+              <!-- Quick Presets -->
+              <div class="presets-row">
+                <span class="preset-label">빠른 프리셋:</span>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  :class="{ active: focusX === 50 && focusY === 20 }"
+                  @click="setFocusPreset(50, 20)"
+                >
+                  얼굴/상단 (20%)
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  :class="{ active: focusX === 50 && focusY === 35 }"
+                  @click="setFocusPreset(50, 35)"
+                >
+                  상단-중간 (35%)
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  :class="{ active: focusX === 50 && focusY === 50 }"
+                  @click="setFocusPreset(50, 50)"
+                >
+                  정중앙 (50%)
+                </button>
+                <button
+                  type="button"
+                  class="preset-chip"
+                  :class="{ active: focusX === 50 && focusY === 75 }"
+                  @click="setFocusPreset(50, 75)"
+                >
+                  하단 (75%)
+                </button>
+              </div>
+
+              <!-- Sliders -->
+              <div class="sliders-wrap">
+                <div class="slider-row">
+                  <span class="slider-title">수직 위치 (상/하):</span>
+                  <input
+                    v-model.number="focusY"
+                    type="range"
+                    min="0"
+                    max="100"
+                    class="range-slider"
+                  />
+                  <span class="slider-num">{{ focusY }}%</span>
+                </div>
+                <div class="slider-row">
+                  <span class="slider-title">수평 위치 (좌/우):</span>
+                  <input
+                    v-model.number="focusX"
+                    type="range"
+                    min="0"
+                    max="100"
+                    class="range-slider"
+                  />
+                  <span class="slider-num">{{ focusX }}%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Real 1:1 Live Preview (Identical to Invitation Gallery) -->
+            <div class="focus-preview-col">
+              <div class="col-header">
+                <span class="col-title">실제 청첩장 1:1 미리보기</span>
+              </div>
+
+              <div class="preview-1-1-box">
+                <img
+                  :src="focusPhoto.url"
+                  alt="1:1 크롭 결과"
+                  class="live-1-1-img"
+                  :style="{ objectPosition: `${focusX}% ${focusY}%` }"
+                />
+              </div>
+
+              <p class="preview-desc">
+                청첩장의 3x3 썸네일 그리드에서 방문자들에게 실제로 보여지는 모습입니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="closeFocusModal">취소</button>
+          <button type="button" class="btn-primary" @click="saveFocusPosition">
+            <Check :size="14" />
+            <span>썸네일 위치 저장</span>
           </button>
         </div>
       </div>
@@ -1879,5 +2153,362 @@ onUnmounted(() => {
 .required-star {
   color: #E74C3C;
   font-weight: bold;
+}
+
+/* 1:1 Thumbnail Position in Edit Modal */
+.thumb-pos-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-warm, #FAF7F2);
+  border: 1px solid var(--border-color, #E8DEC8);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.mini-1-1-preview-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(168, 131, 80, 0.3);
+  background: #EFE7DA;
+  flex-shrink: 0;
+}
+
+.mini-1-1-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.preview-tag {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.65);
+  color: #FFFFFF;
+  font-size: 8.5px;
+  text-align: center;
+  padding: 1px 0;
+}
+
+.thumb-pos-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pos-text {
+  font-size: 12px;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.pos-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 6px 0;
+}
+
+.overlay-btn.crop-btn {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--gold-dark, #8C6D41);
+}
+
+.overlay-btn.crop-btn:hover {
+  background: #FFFFFF;
+  color: #03C75A;
+}
+
+.icon-crop-btn {
+  background: var(--bg-warm);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-main);
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-crop-btn:hover {
+  background: var(--gold-soft);
+  border-color: var(--gold-primary);
+  color: var(--gold-dark);
+}
+
+/* 1:1 Thumbnail Focus Positioning Dedicated Modal */
+.focus-modal-card {
+  max-width: 680px;
+  width: 95%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 3px;
+}
+
+.focus-modal-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.focus-layout {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 20px;
+}
+
+.focus-editor-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.col-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.col-icon {
+  color: var(--gold-dark, #8C6D41);
+}
+
+.focus-image-container {
+  position: relative;
+  width: 100%;
+  max-height: 340px;
+  background: #222222;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-color);
+}
+
+.focus-target-img {
+  max-width: 100%;
+  max-height: 340px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.focus-reticle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.reticle-outer-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #03C75A;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(3, 199, 90, 0.8), inset 0 0 6px rgba(3, 199, 90, 0.4);
+  animation: pulse-ring 1.8s infinite;
+}
+
+.reticle-cross-h {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  right: -8px;
+  height: 2px;
+  background: #03C75A;
+  transform: translateY(-50%);
+}
+
+.reticle-cross-v {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  bottom: -8px;
+  width: 2px;
+  background: #03C75A;
+  transform: translateX(-50%);
+}
+
+.reticle-center-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: #FFFFFF;
+  border: 1px solid #03C75A;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.reticle-badge {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.presets-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.preset-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-warm, #FAF7F2);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-chip:hover {
+  border-color: var(--gold-primary);
+  background: #FFFFFF;
+}
+
+.preset-chip.active {
+  background: var(--gold-dark, #8C6D41);
+  color: #FFFFFF;
+  border-color: var(--gold-dark);
+  font-weight: 600;
+}
+
+.sliders-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-warm, #FAF7F2);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-title {
+  font-size: 11.5px;
+  width: 95px;
+  color: var(--text-sub);
+}
+
+.range-slider {
+  flex: 1;
+  accent-color: var(--gold-dark, #8C6D41);
+  cursor: pointer;
+}
+
+.slider-num {
+  font-size: 11.5px;
+  font-family: monospace;
+  font-weight: 600;
+  width: 36px;
+  text-align: right;
+  color: var(--text-main);
+}
+
+/* Right: Preview Column */
+.focus-preview-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-warm, #FAF7F2);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.preview-1-1-box {
+  width: 150px;
+  height: 150px;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--gold-primary, #CBB495);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: #000;
+}
+
+.live-1-1-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.preview-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .focus-layout {
+    grid-template-columns: 1fr;
+  }
+  .focus-preview-col {
+    order: -1;
+    flex-direction: row;
+    justify-content: center;
+    gap: 14px;
+    text-align: left;
+  }
+  .preview-1-1-box {
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+  }
 }
 </style>

@@ -386,12 +386,24 @@ export function deleteGuestbookEntry(id: string, inputPass?: string, isAdmin = f
   if (index === -1) return false
   if (isAdmin || (inputPass && guestbook.value[index].password === inputPass)) {
     guestbook.value.splice(index, 1)
+    localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
     if (isFirestoreReady()) {
       deleteGuestbookDoc(id).catch(err => console.warn('방명록 Firestore 삭제 실패:', err))
     }
     return true
   }
   return false
+}
+
+export function toggleGuestbookVisibility(id: string): boolean {
+  const item = guestbook.value.find(g => g.id === id)
+  if (!item) return false
+  item.isHidden = !item.isHidden
+  localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
+  if (isFirestoreReady()) {
+    saveGuestbookDoc(item).catch(err => console.warn('방명록 가시성 Firestore 동기화 실패:', err))
+  }
+  return true
 }
 
 // Cloud Realtime Subscription Management
@@ -463,7 +475,7 @@ export function initCloudSubscriptions() {
     unsubGuestbook = subscribeGuestbook((items) => {
       isApplyingCloudUpdate = true
       try {
-        if (items && items.length > 0) {
+        if (items) {
           guestbook.value = items
           localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(items))
         }

@@ -1,17 +1,61 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { weddingInfo } from '../../services/storage'
 import { Phone, MessageSquare, X, Users } from 'lucide-vue-next'
 
 const isContactModalOpen = ref(false)
+let savedScrollY = 0
+let isNavigatingBack = false
+
+const restoreScrollPosition = () => {
+  if (typeof savedScrollY !== 'number' || savedScrollY < 0) return
+  const targetY = savedScrollY
+  window.scrollTo({ top: targetY, behavior: 'instant' })
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: targetY, behavior: 'instant' })
+    setTimeout(() => {
+      window.scrollTo({ top: targetY, behavior: 'instant' })
+    }, 50)
+  })
+}
 
 const openModal = () => {
+  savedScrollY = window.scrollY
+  isNavigatingBack = false
+  history.pushState({ ...history.state, modal: 'contact-modal' }, '', window.location.href)
   isContactModalOpen.value = true
+  document.body.style.overflow = 'hidden'
 }
 
-const closeModal = () => {
+const closeModal = (isFromPopState: boolean | Event = false) => {
+  if (!isContactModalOpen.value) return
   isContactModalOpen.value = false
+  document.body.style.overflow = ''
+
+  const isPop = isFromPopState === true
+  if (!isPop && history.state?.modal === 'contact-modal' && !isNavigatingBack) {
+    isNavigatingBack = true
+    history.back()
+    setTimeout(() => { isNavigatingBack = false }, 300)
+  }
+
+  restoreScrollPosition()
 }
+
+const handlePopState = () => {
+  if (isContactModalOpen.value) {
+    closeModal(true)
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('popstate', handlePopState)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', handlePopState)
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -64,8 +108,9 @@ const closeModal = () => {
     </div>
 
     <!-- Contact Modal -->
-    <Transition name="modal-fade">
-      <div v-if="isContactModalOpen" class="modal-overlay" @click.self="closeModal">
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="isContactModalOpen" class="modal-overlay" @click.self="closeModal">
         <div class="modal-card">
           <div class="modal-header">
             <h3 class="modal-title font-serif">축하 연락처</h3>
@@ -178,6 +223,7 @@ const closeModal = () => {
         </div>
       </div>
     </Transition>
+  </Teleport>
   </section>
 </template>
 
@@ -253,11 +299,13 @@ const closeModal = () => {
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 9999;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .modal-card {
@@ -267,6 +315,9 @@ const closeModal = () => {
   border-radius: 20px;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   animation: slideUp 0.3s ease;
 }
 

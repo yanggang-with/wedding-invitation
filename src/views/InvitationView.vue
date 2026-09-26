@@ -317,7 +317,11 @@ onUnmounted(() => {
     <div
       class="invitation-section-wrapper"
       data-section="guestbook"
-      :style="{ '--section-bg': middleSectionThemes['guestbook'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF' }"
+      :style="{
+        '--section-bg': middleSectionThemes['guestbook'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF',
+        '--card-bg': middleSectionThemes['guestbook'] === 'ivory' ? '#FFFFFF' : 'var(--bg-ivory)',
+        '--input-bg': middleSectionThemes['guestbook'] === 'ivory' ? 'var(--bg-ivory)' : '#FFFFFF'
+      }"
     >
       <GuestbookSection />
     </div>

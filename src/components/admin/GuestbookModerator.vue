@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { guestbook, deleteGuestbookEntry } from '../../services/storage'
+import { guestbook, deleteGuestbookEntry, toggleGuestbookVisibility } from '../../services/storage'
 import type { GuestbookItem } from '../../types/wedding'
 import { Trash2, MessageSquare, Heart, Eye, EyeOff } from 'lucide-vue-next'
 
@@ -10,7 +10,7 @@ const handleDelete = (id: string) => {
 }
 
 const toggleVisibility = (entry: GuestbookItem) => {
-  entry.isHidden = !entry.isHidden
+  toggleGuestbookVisibility(entry.id)
 }
 </script>
 
