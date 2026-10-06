@@ -1,21 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { photos, weddingInfo, formatWeddingDate } from '../../services/storage'
 import { Heart } from 'lucide-vue-next'
 import WeddingDayCalligraphy from './WeddingDayCalligraphy.vue'
 
-const isCoverReady = ref(false)
-const calligraphyRef = ref<InstanceType<typeof WeddingDayCalligraphy> | null>(null)
-
-watch(isCoverReady, (ready) => {
-  if (ready) {
-    nextTick(() => {
-      setTimeout(() => {
-        calligraphyRef.value?.start()
-      }, 450)
-    })
-  }
-})
+const isImageLoaded = ref(false)
+const isIntroRevealed = ref(false)
 
 const currentCoverPhoto = computed(() => {
   const visiblePhotos = photos.value.filter(p => !p.isHidden)
@@ -31,31 +21,49 @@ const coverObjectPosition = computed(() => {
   return currentCoverPhoto.value?.objectPosition || 'center center'
 })
 
+const triggerReveal = () => {
+  if (isIntroRevealed.value) return
+  // 캘리그라피가 우아하게 쓰여지는 최소 감상 시간(1.15초)을 확보한 뒤 자연스럽게 위로 상승
+  setTimeout(() => {
+    isIntroRevealed.value = true
+  }, 1150)
+}
+
 const preloadCover = () => {
   if (!coverPhotoUrl.value) {
-    isCoverReady.value = true
+    isImageLoaded.value = true
+    triggerReveal()
     return
   }
   const img = new Image()
   img.src = coverPhotoUrl.value
   if (img.complete) {
-    isCoverReady.value = true
+    isImageLoaded.value = true
+    triggerReveal()
   } else {
     img.onload = () => {
-      isCoverReady.value = true
+      isImageLoaded.value = true
+      triggerReveal()
     }
     img.onerror = () => {
-      isCoverReady.value = true
+      isImageLoaded.value = true
+      triggerReveal()
     }
   }
 }
 
 onMounted(() => {
   preloadCover()
+  // 네트워크 지연 시 최대 2.5초 후에는 안전하게 커버 섹션 전체 노출
+  setTimeout(() => {
+    if (!isIntroRevealed.value) {
+      isIntroRevealed.value = true
+    }
+  }, 2500)
 })
 
 watch(coverPhotoUrl, () => {
-  isCoverReady.value = false
+  isImageLoaded.value = false
   preloadCover()
 })
 
@@ -69,57 +77,41 @@ const formattedDate = computed(() => {
 </script>
 
 <template>
-  <Transition name="cover-fade" mode="out-in">
-    <!-- 1. Full-screen Intro Loading Screen: renders until cover image is 100% loaded -->
-    <div v-if="!isCoverReady" class="cover-loading-screen" key="loading">
-      <div class="cover-loading-card">
-        <div class="intro-monogram font-serif">
-          <span>{{ weddingInfo.groom.name }}</span>
-          <span class="mono-heart">♥</span>
-          <span>{{ weddingInfo.bride.name }}</span>
-        </div>
-        <div class="loading-ring-spinner"></div>
-        <p class="intro-text font-sans">청첩장을 불러오는 중입니다...</p>
+  <header class="cover-container" :class="{ 'is-revealed': isIntroRevealed }">
+    <!-- Top Tagline & Calligraphy (처음 로딩 시 화면 중앙에 위치하다가 로딩 완료 시 살짝 위로 스르륵 상승) -->
+    <div class="header-tagline">
+      <div class="calligraphy-container">
+        <WeddingDayCalligraphy
+          color="#000000"
+          :speed="1.15"
+          :autoplay="true"
+          :replayable="false"
+        />
       </div>
     </div>
 
-    <!-- 2. Main Cover Section: Rendered only after image is 100% loaded -->
-    <header v-else class="cover-container" key="content">
-      <!-- Top Tagline & Calligraphy -->
-      <div class="header-tagline">
-        <div class="calligraphy-container">
-          <WeddingDayCalligraphy
-            ref="calligraphyRef"
-            color="#000000"
-            :speed="1.1"
-            :autoplay="true"
-            :replayable="false"
-          />
+    <!-- Main Photo Frame with elegant shadow & border -->
+    <div class="photo-frame-wrapper cover-reveal-element">
+      <div class="photo-frame">
+        <img
+          v-if="coverPhotoUrl"
+          :src="coverPhotoUrl"
+          alt="웨딩 대표 사진"
+          class="cover-image"
+          :style="{ objectPosition: coverObjectPosition }"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
+        />
+        <div v-else class="empty-cover">
+          <Heart :size="32" class="empty-icon" />
+          <p>관리자 페이지에서 대표 사진을 등록해 주세요</p>
         </div>
       </div>
-
-      <!-- Main Photo Frame with elegant shadow & border -->
-      <div class="photo-frame-wrapper">
-        <div class="photo-frame">
-          <img
-            v-if="coverPhotoUrl"
-            :src="coverPhotoUrl"
-            alt="웨딩 대표 사진"
-            class="cover-image"
-            :style="{ objectPosition: coverObjectPosition }"
-            loading="eager"
-            fetchpriority="high"
-            decoding="async"
-          />
-          <div v-else class="empty-cover">
-            <Heart :size="32" class="empty-icon" />
-            <p>관리자 페이지에서 대표 사진을 등록해 주세요</p>
-          </div>
-        </div>
-      </div>
+    </div>
 
     <!-- Couple Names & Wedding Details -->
-    <div class="couple-details">
+    <div class="couple-details cover-reveal-element">
       <h1 class="couple-names font-serif">
         <span>{{ weddingInfo.groom.name }}</span>
         <span class="divider-dot font-sans">♥</span>
@@ -134,7 +126,6 @@ const formattedDate = computed(() => {
       </div>
     </div>
   </header>
-  </Transition>
 </template>
 
 <style scoped>
@@ -152,20 +143,55 @@ const formattedDate = computed(() => {
   gap: 40px;
   box-sizing: border-box;
   width: 100%;
+  overflow: hidden;
 }
 
+/* 1. Calligraphy Tagline: 처음엔 화면 중앙 쪽에 안착, is-revealed 시 원래 상단으로 부드럽게 상승 */
 .header-tagline {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
   margin-bottom: 0px;
+  z-index: 5;
+  /* 화면 정중앙 오프셋에서 상단 위치로 부드럽게 이동 */
+  transform: translateY(calc(24vh));
+  transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.cover-container.is-revealed .header-tagline {
+  transform: translateY(0);
 }
 
 .calligraphy-container {
   width: 100%;
   max-width: 285px;
   margin: 0 auto;
+}
+
+/* 2. Photo Frame and Couple Details: 처음엔 숨겨져 있다가 로딩 완료 시 페이드인 + 슬라이드업 등장 */
+.cover-reveal-element {
+  opacity: 0;
+  transform: translateY(35px);
+  pointer-events: none;
+  transition: opacity 0.95s cubic-bezier(0.16, 1, 0.3, 1), transform 0.95s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.cover-container.is-revealed .cover-reveal-element {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* 사진 프레임과 커플 텍스트 등장 시차 */
+.cover-container.is-revealed .photo-frame-wrapper {
+  transition-delay: 0.22s;
+}
+
+.cover-container.is-revealed .couple-details {
+  transition-delay: 0.35s;
 }
 
 .photo-frame-wrapper {
@@ -187,80 +213,7 @@ const formattedDate = computed(() => {
   overflow: hidden;
   background: var(--bg-warm);
   flex-shrink: 0;
-}
-
-.cover-loading-screen {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  background-color: var(--bg-ivory);
-  width: 100%;
-}
-
-.cover-loading-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-
-.intro-monogram {
-  font-family: 'Nanum Myeongjo', serif;
-  font-size: 22px;
-  color: var(--gold-dark);
-  letter-spacing: 2px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-}
-
-.mono-heart {
-  color: var(--rose-accent);
-  font-size: 18px;
-}
-
-.loading-ring-spinner {
-  width: 36px;
-  height: 36px;
-  border: 2.5px solid rgba(85, 93, 102, 0.2);
-  border-top-color: var(--gold-primary);
-  border-radius: 50%;
-  animation: spin 0.85s linear infinite;
-  margin: 6px 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.intro-names {
-  font-size: 16px;
-  color: var(--text-main);
-  letter-spacing: 2px;
-}
-
-.intro-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-}
-
-.cover-fade-enter-active {
-  transition: opacity 0.5s ease-out;
-}
-
-.cover-fade-leave-active {
-  transition: opacity 0.3s ease-in;
-}
-
-.cover-fade-enter-from,
-.cover-fade-leave-to {
-  opacity: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
 }
 
 .cover-image {

@@ -8,6 +8,7 @@ import {
   DEFAULT_ADMIN_SETTINGS,
   DEFAULT_LIVE_SNAPS
 } from '../constants/initialData'
+import { encryptPassword, verifyPassword } from '../utils/crypto'
 import {
   initFirebase,
   uploadToFirebaseStorage,
@@ -75,6 +76,19 @@ function loadInitialLiveSnaps(): LiveSnapItem[] {
 
 export const liveSnaps = ref<LiveSnapItem[]>(loadInitialLiveSnaps())
 
+// 메신저 및 SNS 공유 미리보기용 Open Graph / Twitter 메타 태그 동적 갱신 헬퍼
+export function updateOpenGraphMeta(imageUrl?: string) {
+  if (typeof document === 'undefined') return
+  const targetUrl = imageUrl || photos.value.find(p => p.isCover)?.url || photos.value[0]?.url
+  if (!targetUrl) return
+
+  const ogImage = document.querySelector('meta[property="og:image"]')
+  if (ogImage) ogImage.setAttribute('content', targetUrl)
+
+  const twitterImage = document.querySelector('meta[property="twitter:image"]')
+  if (twitterImage) twitterImage.setAttribute('content', targetUrl)
+}
+
 // 대표 사진이 항상 무조건 1번째(index 0)에 위치하도록 보장하는 헬퍼
 export function ensureCoverPhotoFirst() {
   const list = photos.value
@@ -95,10 +109,21 @@ export function ensureCoverPhotoFirst() {
       p.isCover = false
     }
   })
+  updateOpenGraphMeta(list[0]?.url)
 }
 
-// 시작 시 대표 사진 1번째 정렬 보장
+// 시작 시 대표 사진 1번째 정렬 보장 및 OG 태그 동기화
 ensureCoverPhotoFirst()
+
+// 신랑 성함 '경주원', 신부 성함 '양예진' 기본값 및 정합성 보장
+if (!weddingInfo.value.groom?.name || weddingInfo.value.groom.name === '주원') {
+  if (!weddingInfo.value.groom) weddingInfo.value.groom = { ...DEFAULT_WEDDING_INFO.groom }
+  weddingInfo.value.groom.name = '경주원'
+}
+if (!weddingInfo.value.bride?.name || weddingInfo.value.bride.name === '예진') {
+  if (!weddingInfo.value.bride) weddingInfo.value.bride = { ...DEFAULT_WEDDING_INFO.bride }
+  weddingInfo.value.bride.name = '양예진'
+}
 
 // Cloud Sync Reactive States
 export const isCloudSyncing = ref(false)
@@ -369,12 +394,16 @@ export function deleteRsvpItem(id: string) {
 
 // Guestbook operations
 export function addGuestbookEntry(entry: Omit<GuestbookItem, 'id' | 'createdAt'>) {
+  // 비밀번호 암호화 저장
+  const encryptedPassword = encryptPassword(entry.password || '')
   const newItem: GuestbookItem = {
     ...entry,
+    password: encryptedPassword,
     id: 'gb_' + Date.now(),
     createdAt: new Date().toISOString()
   }
   guestbook.value.unshift(newItem)
+  localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
   if (isFirestoreReady()) {
     saveGuestbookDoc(newItem).catch(err => console.warn('방명록 Firestore 저장 실패:', err))
   }
@@ -384,7 +413,11 @@ export function addGuestbookEntry(entry: Omit<GuestbookItem, 'id' | 'createdAt'>
 export function deleteGuestbookEntry(id: string, inputPass?: string, isAdmin = false): boolean {
   const index = guestbook.value.findIndex(g => g.id === id)
   if (index === -1) return false
-  if (isAdmin || (inputPass && guestbook.value[index].password === inputPass)) {
+  const target = guestbook.value[index]
+  
+  // 관리자 권한이거나 비밀번호 복호화 검증 일치 시 삭제 허용
+  const isMatch = isAdmin || (!!inputPass && verifyPassword(inputPass, target.password || ''))
+  if (isMatch) {
     guestbook.value.splice(index, 1)
     localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
     if (isFirestoreReady()) {

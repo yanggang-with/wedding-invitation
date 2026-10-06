@@ -42,6 +42,11 @@ const handleAddComment = () => {
     return
   }
 
+  if (!password.value.trim()) {
+    alert('메시지 수정/삭제 시 필요한 비밀번호를 입력해 주세요.')
+    return
+  }
+
   // 비속어 및 악담 필터링 검사
   const combinedText = `${author.value} ${message.value}`
   const profanityResult = checkProfanity(combinedText)
@@ -54,7 +59,7 @@ const handleAddComment = () => {
   try {
     addGuestbookEntry({
       author: author.value.trim(),
-      password: password.value.trim() || '1234',
+      password: password.value.trim(),
       message: message.value.trim()
     })
     author.value = ''
@@ -93,7 +98,7 @@ const formatDate = (isoString: string) => {
 <template>
   <section class="invitation-section guestbook-section">
     <div class="section-divider">
-      <span class="section-label">GUESTBOOK</span>
+      <span class="section-label">방명록</span>
     </div>
 
     <h2 class="section-title font-serif">축하의 한마디</h2>
@@ -114,9 +119,10 @@ const formatDate = (isoString: string) => {
           <input
             v-model="password"
             type="password"
-            placeholder="비밀번호 4자리"
+            placeholder="비밀번호 4자리 (필수)"
             class="input-field half"
             maxlength="10"
+            required
           />
         </div>
 

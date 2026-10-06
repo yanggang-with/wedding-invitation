@@ -7,6 +7,18 @@ const isContactModalOpen = ref(false)
 let savedScrollY = 0
 let isNavigatingBack = false
 
+// 이름에서 성을 뗀 이름만 추출 (예: 경주원 -> 주원, 양예진 -> 예진)
+const getGivenName = (fullName: string) => {
+  if (!fullName) return ''
+  const trimmed = fullName.trim()
+  if (trimmed === '경주원') return '주원'
+  if (trimmed === '양예진') return '예진'
+  if (trimmed.length === 3 || trimmed.length === 2) {
+    return trimmed.slice(1)
+  }
+  return trimmed
+}
+
 const restoreScrollPosition = () => {
   if (typeof savedScrollY !== 'number' || savedScrollY < 0) return
   const targetY = savedScrollY
@@ -79,23 +91,37 @@ onUnmounted(() => {
     <!-- Family / Relation Lines -->
     <div class="family-lines font-serif">
       <div class="family-item">
-        <span class="parents">
-          <span v-if="weddingInfo.groom.isFatherDeceased" class="deceased">故</span>{{ weddingInfo.groom.fatherName }}
-          ·
-          <span v-if="weddingInfo.groom.isMotherDeceased" class="deceased">故</span>{{ weddingInfo.groom.motherName }}
-        </span>
-        <span class="relation">의 {{ weddingInfo.groom.relationRole || '장남' }}</span>
-        <strong class="name">{{ weddingInfo.groom.name }}</strong>
+        <div class="family-col parents-col">
+          <span class="parents-names">
+            <span v-if="weddingInfo.groom.isFatherDeceased" class="deceased">故</span>{{ weddingInfo.groom.fatherName }}
+            <span class="name-dot">·</span>
+            <span v-if="weddingInfo.groom.isMotherDeceased" class="deceased">故</span>{{ weddingInfo.groom.motherName }}
+          </span>
+          <span class="particle">의</span>
+        </div>
+        <div class="family-col relation-col">
+          <span class="relation">{{ weddingInfo.groom.relationRole || '아들' }}</span>
+        </div>
+        <div class="family-col name-col">
+          <strong class="name">{{ getGivenName(weddingInfo.groom.name) }}</strong>
+        </div>
       </div>
 
       <div class="family-item">
-        <span class="parents">
-          <span v-if="weddingInfo.bride.isFatherDeceased" class="deceased">故</span>{{ weddingInfo.bride.fatherName }}
-          ·
-          <span v-if="weddingInfo.bride.isMotherDeceased" class="deceased">故</span>{{ weddingInfo.bride.motherName }}
-        </span>
-        <span class="relation">의 {{ weddingInfo.bride.relationRole || '장녀' }}</span>
-        <strong class="name">{{ weddingInfo.bride.name }}</strong>
+        <div class="family-col parents-col">
+          <span class="parents-names">
+            <span v-if="weddingInfo.bride.isFatherDeceased" class="deceased">故</span>{{ weddingInfo.bride.fatherName }}
+            <span class="name-dot">·</span>
+            <span v-if="weddingInfo.bride.isMotherDeceased" class="deceased">故</span>{{ weddingInfo.bride.motherName }}
+          </span>
+          <span class="particle">의</span>
+        </div>
+        <div class="family-col relation-col">
+          <span class="relation">{{ weddingInfo.bride.relationRole || '딸' }}</span>
+        </div>
+        <div class="family-col name-col">
+          <strong class="name">{{ getGivenName(weddingInfo.bride.name) }}</strong>
+        </div>
       </div>
     </div>
 
@@ -254,39 +280,74 @@ onUnmounted(() => {
 .family-lines {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 14px;
   margin-bottom: 32px;
-  padding: 20px 10px;
+  padding: 22px 10px;
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
 }
 
 .family-item {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) 48px minmax(50px, auto);
+  align-items: baseline;
   font-size: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  column-gap: 8px;
 }
 
-.parents {
+.parents-col {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px;
   color: var(--text-sub);
+  white-space: nowrap;
+}
+
+.name-dot {
+  margin: 0 3px;
+  opacity: 0.6;
+}
+
+.particle {
+  font-size: 14px;
+  color: var(--gold-primary);
+  margin-left: 2px;
+}
+
+.relation-col {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  text-align: center;
+}
+
+.relation {
+  font-size: 13.5px;
+  color: var(--gold-primary);
+  text-align: center;
+  display: inline-block;
+  letter-spacing: -0.5px;
+}
+
+.name-col {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.name-col .name {
+  color: var(--text-main);
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .deceased {
   font-size: 12px;
   margin-right: 2px;
   color: var(--text-muted);
-}
-
-.relation {
-  font-size: 13px;
-  color: var(--gold-primary);
-}
-
-.name {
-  color: var(--text-main);
-  font-weight: 600;
 }
 
 .contact-action {

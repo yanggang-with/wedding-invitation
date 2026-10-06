@@ -312,3 +312,48 @@
   - `handleThumbnailTouchMove`에서 `isPeeking.value === true` 상태일 때 `e.cancelable && e.preventDefault()`를 즉시 호출하여 브라우저의 제스처 스크롤 차단.
   - 롱프레스 인식 시점(320ms 경과)에 `document.body.style.overflow = 'hidden'` 적용 및 `window.addEventListener('touchmove', preventDefaultTouchMove, { passive: false })`를 브라우저 윈도우 최상위 레벨에 등록하여 손가락을 상하좌우로 움직여도 배경 div/페이지가 절대 스크롤되지 않도록 원천 잠금.
   - 롱프레스 종료(`handleThumbnailTouchEnd`, `closePeek`) 및 컴포넌트 언마운트(`onUnmounted`) 시 `body.overflow = ''` 및 `touchmove` 리스너를 완벽하게 해제/정리.
+
+---
+
+### 26차 요청: 예식정보 신랑/신부 성함 확정, 모바일 사진 드래그핸들 제한, 초대글 호칭/이름 정렬 및 성 분리, 방명록 제목/비밀번호 암호화, 커버 SVG 인트로 슬라이드업 모션
+- **<관리자 예식정보 탭 신랑성함/신부성함 확정 보장 (`storage.ts`, `InfoEditor.vue`)>**:
+  - 신랑 성함 '경주원', 신부 성함 '양예진' 기본값 및 로드 시 정합성 보장.
+- **<관리자 사진관리 탭 모바일 이동 범위 드래그핸들 제한 (`PhotoManager.vue`)>**:
+  - 모바일 터치 환경에서 썸네일 전체가 아닌 오직 좌상단 알약 드래그 핸들(`.drag-handle-pill`)을 터치했을 때만 순서 이동 기능이 작동하도록 제한.
+  - PC 마우스 환경에서는 기존과 동일하게 카드 어디든 잡고 드래그할 수 있도록 이원화 지원.
+- **<초대글 섹션 부모님-자녀 관계 3단 그리드 정렬 및 성 분리 (`GreetingSection.vue`)>**:
+  - `family-lines`를 3열 정렬 그리드로 개편:
+    - 1열: 부모님 성함 + '의' (우측 정렬로 '의' 위치 완벽 일치)
+    - 2열: '아들' / '딸' 호칭 (고정 폭 중앙 정렬로 수평 정렬)
+    - 3열: '주원' / '예진' 자녀 이름 (좌측 정렬로 시작점 완벽 일치, 성 제외 이름만 표기)
+  - 초대글 모달 및 다른 섹션(커버, 캘린더, 푸터 등)에서는 성을 붙여 '경주원', '양예진' 풀네임 유지.
+- **<방명록 섹션 제목 변경 및 비밀번호 필수 암호화/복호화 검증 (`GuestbookSection.vue`, `src/utils/crypto.ts`, `storage.ts`)>**:
+  - 섹션 라벨 'GUESTBOOK'을 '방명록'으로 변경.
+  - 비밀번호 입력 필드 `required` 및 미입력 시 전송 차단 유효성 검사 적용.
+  - `src/utils/crypto.ts` 양방향 암복호화 엔진 구축: 비밀번호 저장 시 암호화(`ENC:...`)하여 Firestore/로컬스토리지 저장, 삭제 요청 시 복호화 및 검증.
+- **<첫 인트로 our wedding day SVG 중앙 표시 후 커버 슬라이드업 상승 연출 (`CoverSection.vue`)>**:
+  - 처음 페이지 로딩 시 화면 중앙에 `our wedding day` 캘리그라피 SVG가 우아하게 표시.
+  - 로딩 완료 시 캘리그라피 SVG가 부드럽게 상단 원래 위치로 스르륵 위로 올라가면서(`transform: translateY(0)`), 하단의 대표 사진과 신랑·신부 정보가 페이드인되며 자연스러운 커버 섹션으로 전환되는 모션 그래픽 완성.
+
+---
+
+### 27차 요청: 메신저 공유 미리보기 사진(OG Image) 현재 대표사진 동적/정적 일치
+- **<메신저 스크래퍼 정적 메타 태그 갱신 (`index.html`)>**:
+  - 카카오톡, 문자메시지, 페이스북, 인스타그램 등 메신저 링크 공유 봇이 파싱할 수 있도록 `index.html` 내 `og:image`, `og:image:width`, `og:image:height`, `og:image:alt`, `twitter:card`, `twitter:image` 태그에 Firestore에 등록된 실제 고해상도 대표 사진 URL 적용.
+- **<클라이언트 런타임 Open Graph 동적 갱신 (`src/services/storage.ts`)>**:
+  - `updateOpenGraphMeta()` 헬퍼 함수를 구축하여 대표 사진이 변경되거나 클라우드에서 동기화될 때 클라이언트 DOM의 메타 태그도 즉시 연동되도록 보장.
+
+---
+
+### 28차 요청: 관리자 사진관리 모바일 스크롤 개선, 버튼 정렬 최적화, 문구 변경 및 Google API Key 보안 가이드
+- **<모바일 사진 관리 터치 스크롤 지원 (`PhotoManager.vue`)>**:
+  - 모바일 브라우저에서 이미지 썸네일 영역에 적용되어 있던 `touch-action: none`을 `touch-action: pan-y`로 수정하여, 이미지 위를 위아래로 쓸어 올려도 부드럽게 페이지가 스크롤되도록 개선.
+  - 순서 이동은 좌상단 드래그 핸들(`.drag-handle-pill`)로만 안전하게 트리거되도록 이원화 유지.
+- **<모바일 사진 클릭 시 액션 버튼 정렬 최적화 및 팝업 토글 (`PhotoManager.vue`)>**:
+  - 모바일 터치 환경에서 각 사진을 탭했을 때 숨겨진 액션 버튼들이 벗어나지 않도록, 모바일 미디어 쿼리(`max-width: 640px`)에서 `display: grid; grid-template-columns: repeat(2, 1fr)` 2열 정렬 레이아웃 적용.
+  - 썸네일 탭 시 오버레이가 토글(`is-active-mobile`)되며, 바깥 영역 클릭 시 자동으로 닫히도록 터치 UX 고도화.
+  - 기존 '1:1 맞춤' 버튼 문구를 사용자가 요청한 간결한 '비율'로 변경.
+- **<app.js Google API 키 보안 방지 및 Google Cloud Console HTTP Referrer 제한 가이드 안내>**:
+  - 싱글 페이지 애플리케이션(SPA)의 구조적 특성(클라이언트 번들 필수 포함)에 대한 상세 기술 설명.
+  - 구글 클라우드 콘솔(GCP)에서 도메인 제한(`HTTP 리퍼러`)을 설정하여 `oppsjw.github.io/*` 외의 타 사이트 도용을 100% 원천 차단하는 구체적인 실무 방어 전략 완벽 제시.
+

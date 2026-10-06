@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   photos,
   uploadImage,
@@ -53,6 +53,16 @@ const storageBucket = computed(() => getStorageBucketName() || adminSettings.val
 const isSyncing = ref(false)
 const showFirebaseModal = ref(false)
 const loadedAdminThumbs = ref<Record<string, boolean>>({})
+
+// 모바일 환경에서 탭(터치) 시 액션 버튼 오버레이 토글 상태 관리
+const activeMobilePhotoId = ref<string | null>(null)
+const toggleMobileOverlay = (photoId: string) => {
+  if (activeMobilePhotoId.value === photoId) {
+    activeMobilePhotoId.value = null
+  } else {
+    activeMobilePhotoId.value = photoId
+  }
+}
 
 const firebaseForm = ref({
   apiKey: adminSettings.value.firebaseConfig?.apiKey || '',
@@ -514,11 +524,23 @@ const handleTouchStart = (index: number, e: TouchEvent) => {
   window.addEventListener('touchcancel', handleTouchCancel)
 }
 
+const handleOutsideClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target?.closest('.photo-card')) {
+    activeMobilePhotoId.value = null
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleOutsideClick)
+})
+
 onUnmounted(() => {
   if (cleanupMouseMove) cleanupMouseMove()
   window.removeEventListener('touchmove', handleTouchMove)
   window.removeEventListener('touchend', handleTouchEnd)
   window.removeEventListener('touchcancel', handleTouchCancel)
+  window.removeEventListener('click', handleOutsideClick)
 })
 </script>
 
@@ -664,11 +686,11 @@ onUnmounted(() => {
           <span>{{ index === 0 ? '★ 대표 사진으로 지정' : '여기로 이동' }}</span>
         </div>
 
-        <!-- Drag Handle & Badges -->
+        <!-- Drag Handle & Badges (PC allows mouse drag on wrap, Mobile strictly restricted to drag-handle-pill) -->
         <div
           class="photo-thumb-wrap"
           @mousedown="handleMouseDown(index, $event)"
-          @touchstart="handleTouchStart(index, $event)"
+          @click="toggleMobileOverlay(photo.id)"
         >
           <!-- Skeleton Shimmer Loader while photo loads from Firebase -->
           <div v-if="!loadedAdminThumbs[photo.id]" class="admin-thumb-skeleton">
@@ -694,6 +716,7 @@ onUnmounted(() => {
             title="마우스 또는 터치로 끌어서 순서 변경"
             @mousedown.stop="handleMouseDown(index, $event)"
             @touchstart.stop="handleTouchStart(index, $event)"
+            @click.stop
           >
             <GripVertical :size="13" />
             <span>{{ index + 1 }}</span>
@@ -711,25 +734,29 @@ onUnmounted(() => {
             <span>숨김</span>
           </div>
 
-          <!-- Action Hover Overlay -->
-          <div class="thumb-overlay">
-            <button class="overlay-btn edit-btn" @click="openEditModal(photo)" title="사진 수정">
-              <Edit3 :size="14" />
+          <!-- Action Hover Overlay (PC hover or Mobile tap) -->
+          <div
+            class="thumb-overlay"
+            :class="{ 'is-active-mobile': activeMobilePhotoId === photo.id }"
+            @click.stop
+          >
+            <button class="overlay-btn edit-btn" @click.stop="openEditModal(photo)" title="사진 수정">
+              <Edit3 :size="13" />
               <span>수정</span>
             </button>
-            <button class="overlay-btn crop-btn" @click.stop="openFocusModal(photo)" title="1:1 썸네일 위치 맞춤 (얼굴 잘림 방지)">
-              <Crop :size="14" />
-              <span>1:1 맞춤</span>
+            <button class="overlay-btn crop-btn" @click.stop="openFocusModal(photo)" title="1:1 썸네일 노출 비율 및 위치 맞춤">
+              <Crop :size="13" />
+              <span>비율</span>
             </button>
             <!-- 대표 사진은 숨김 불가 -->
             <button
               v-if="!photo.isCover"
               class="overlay-btn toggle-btn"
-              @click="togglePhotoVisibility(photo.id)"
+              @click.stop="togglePhotoVisibility(photo.id)"
               :title="photo.isHidden ? '청첩장에 노출하기' : '청첩장에서 숨기기'"
             >
-              <Eye v-if="photo.isHidden" :size="14" />
-              <EyeOff v-else :size="14" />
+              <Eye v-if="photo.isHidden" :size="13" />
+              <EyeOff v-else :size="13" />
               <span>{{ photo.isHidden ? '보이기' : '숨기기' }}</span>
             </button>
             <div
@@ -737,11 +764,11 @@ onUnmounted(() => {
               class="overlay-btn disabled-btn"
               title="대표 사진은 메인 표지에 항상 노출됩니다"
             >
-              <Eye :size="14" />
+              <Eye :size="13" />
               <span>대표</span>
             </div>
-            <button class="overlay-btn delete-btn" @click="handleDelete(photo.id)" title="사진 삭제">
-              <Trash2 :size="14" />
+            <button class="overlay-btn delete-btn" @click.stop="handleDelete(photo.id)" title="사진 삭제">
+              <Trash2 :size="13" />
             </button>
           </div>
         </div>
@@ -1425,7 +1452,7 @@ onUnmounted(() => {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .photo-thumb-wrap:active {
@@ -1556,23 +1583,24 @@ onUnmounted(() => {
 .thumb-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
   opacity: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: opacity 0.2s;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  box-sizing: border-box;
+  transition: opacity 0.2s ease;
   z-index: 3;
-  cursor: grab;
+  cursor: pointer;
+  touch-action: pan-y;
 }
 
-.thumb-overlay:active {
-  cursor: grabbing;
-}
-
-
-.photo-card:hover .thumb-overlay {
+.photo-card:hover .thumb-overlay,
+.thumb-overlay.is-active-mobile {
   opacity: 1;
 }
 
@@ -1580,16 +1608,18 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.95);
   color: var(--text-main);
   border: none;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
+  white-space: nowrap;
   transition: all 0.15s;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .overlay-btn:hover {
@@ -1611,7 +1641,7 @@ onUnmounted(() => {
 
 .overlay-btn.delete-btn {
   color: var(--rose-accent);
-  padding: 6px 8px;
+  padding: 5px 8px;
 }
 
 .overlay-btn.delete-btn:hover {
@@ -2509,6 +2539,28 @@ onUnmounted(() => {
     width: 90px;
     height: 90px;
     flex-shrink: 0;
+  }
+
+  /* 모바일 화면에서 오버레이 버튼 정렬: 벗어나지 않고 카드 안에 쏙 들어가도록 2열 그리드 배치 */
+  .thumb-overlay {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    align-content: center;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .thumb-overlay .overlay-btn {
+    width: 100%;
+    padding: 6px 4px;
+    font-size: 11px;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .thumb-overlay .overlay-btn.delete-btn {
+    grid-column: span 2;
+    padding: 5px 4px;
   }
 }
 </style>

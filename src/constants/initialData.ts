@@ -3,7 +3,7 @@ import type { WeddingInfo, PhotoItem, AccountItem, GuestbookItem, AdminSettings,
 export const DEFAULT_PHOTOS: PhotoItem[] = [
   {
     id: 'photo-1',
-    url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://firebasestorage.googleapis.com/v0/b/wedding-invitation-ef1cb.firebasestorage.app/o/photos%2F1790262549380_LWR01342-1_______.jpg?alt=media&token=53b6f623-14fe-443f-bfa3-a70ed989d70a',
     caption: '따스한 햇살 아래, 우리의 첫 시작',
     isCover: true,
     order: 0,
