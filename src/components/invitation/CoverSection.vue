@@ -5,6 +5,7 @@ import { Heart } from 'lucide-vue-next'
 import WeddingDayCalligraphy from './WeddingDayCalligraphy.vue'
 
 const isImageLoaded = ref(false)
+const isCalligraphyComplete = ref(false)
 const isIntroRevealed = ref(false)
 
 const currentCoverPhoto = computed(() => {
@@ -21,45 +22,53 @@ const coverObjectPosition = computed(() => {
   return currentCoverPhoto.value?.objectPosition || 'center center'
 })
 
-const triggerReveal = () => {
+// 손글씨 효과가 완전히 끝난 후 SVG가 살짝 위로 올라가도록 체크
+const checkAndReveal = () => {
   if (isIntroRevealed.value) return
-  // 캘리그라피가 우아하게 쓰여지는 최소 감상 시간(1.15초)을 확보한 뒤 자연스럽게 위로 상승
-  setTimeout(() => {
-    isIntroRevealed.value = true
-  }, 1150)
+  // 손글씨가 끝나고 대표 사진도 준비되었을 때 지체 없이(60ms) 부드럽게 위로 상승
+  if (isCalligraphyComplete.value && isImageLoaded.value) {
+    setTimeout(() => {
+      isIntroRevealed.value = true
+    }, 60)
+  }
+}
+
+const onCalligraphyComplete = () => {
+  isCalligraphyComplete.value = true
+  checkAndReveal()
 }
 
 const preloadCover = () => {
   if (!coverPhotoUrl.value) {
     isImageLoaded.value = true
-    triggerReveal()
+    checkAndReveal()
     return
   }
   const img = new Image()
   img.src = coverPhotoUrl.value
   if (img.complete) {
     isImageLoaded.value = true
-    triggerReveal()
+    checkAndReveal()
   } else {
     img.onload = () => {
       isImageLoaded.value = true
-      triggerReveal()
+      checkAndReveal()
     }
     img.onerror = () => {
       isImageLoaded.value = true
-      triggerReveal()
+      checkAndReveal()
     }
   }
 }
 
 onMounted(() => {
   preloadCover()
-  // 네트워크 지연 시 최대 2.5초 후에는 안전하게 커버 섹션 전체 노출
+  // 안전장치: 혹시 모를 타이머 지연 시에도 최대 4.2초 후에는 자연스럽게 전환
   setTimeout(() => {
     if (!isIntroRevealed.value) {
       isIntroRevealed.value = true
     }
-  }, 2500)
+  }, 4200)
 })
 
 watch(coverPhotoUrl, () => {
@@ -86,6 +95,7 @@ const formattedDate = computed(() => {
           :speed="1.15"
           :autoplay="true"
           :replayable="false"
+          @complete="onCalligraphyComplete"
         />
       </div>
     </div>

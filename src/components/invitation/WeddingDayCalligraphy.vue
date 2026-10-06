@@ -216,8 +216,8 @@ const startAnimation = () => {
   }, (2.85 / effectiveSpeed) * 1000)
   animationTimers.push(dayTimer)
 
-  // 6. 최종 완료 이벤트 (3.50s 시점)
-  const totalDuration = ((2.85 + 0.65) / effectiveSpeed) * 1000
+  // 6. 최종 완료 이벤트 (Day 페이드인이 또렷해지는 시점에 바로 완료 이벤트 발생)
+  const totalDuration = ((2.85 + 0.35) / effectiveSpeed) * 1000
   const completeTimer = window.setTimeout(() => {
     isAnimating.value = false
     isCompleted.value = true
