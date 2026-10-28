@@ -36,7 +36,8 @@ import {
   Settings,
   AlertCircle,
   Crop,
-  Target
+  Target,
+  Heart
 } from 'lucide-vue-next'
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -732,6 +733,20 @@ onUnmounted(() => {
           <div v-if="photo.isHidden" class="hidden-badge font-sans">
             <EyeOff :size="11" />
             <span>숨김</span>
+          </div>
+
+          <!-- Likes Count Pill Badge (썸네일 우하단) -->
+          <div
+            class="photo-likes-pill font-sans"
+            :class="{ 'is-active': (photo.likes || 0) > 0 }"
+            title="하객 좋아요 수"
+          >
+            <Heart
+              :size="11"
+              :fill="(photo.likes || 0) > 0 ? '#FF3B30' : 'rgba(255, 255, 255, 0.7)'"
+              :stroke="(photo.likes || 0) > 0 ? '#FF3B30' : '#FFFFFF'"
+            />
+            <span>{{ photo.likes || 0 }}</span>
           </div>
 
           <!-- Action Hover Overlay (PC hover or Mobile tap) -->
@@ -1578,6 +1593,34 @@ onUnmounted(() => {
 
 .cover-badge + .hidden-badge {
   right: 58px;
+}
+
+.photo-likes-pill {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #FFFFFF;
+  padding: 2.5px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3.5px;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.photo-likes-pill.is-active {
+  background: rgba(255, 255, 255, 0.95);
+  color: #FF3B30;
+  border: 1px solid rgba(255, 59, 48, 0.35);
+  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
 }
 
 .thumb-overlay {

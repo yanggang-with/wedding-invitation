@@ -340,6 +340,21 @@ export function togglePhotoVisibility(id: string) {
   }
 }
 
+export function updatePhotoLikes(id: string, delta: number) {
+  const photo = photos.value.find(p => p.id === id)
+  if (photo) {
+    photo.likes = Math.max(0, (photo.likes || 0) + delta)
+    try {
+      localStorage.setItem(STORAGE_KEYS.PHOTOS, JSON.stringify(photos.value))
+      if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+        forceUploadToCloud().catch(() => {})
+      }
+    } catch (e) {
+      console.warn('Failed to save photo likes:', e)
+    }
+  }
+}
+
 export function reorderPhotos(fromIndex: number, toIndex: number) {
   if (fromIndex === toIndex) return
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import { photos, weddingInfo, getOptimizedImageUrl, isStoryOpen } from '../../services/storage'
+import { photos, weddingInfo, getOptimizedImageUrl, isStoryOpen, updatePhotoLikes } from '../../services/storage'
 import type { PhotoItem } from '../../types/wedding'
 import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause, Heart } from 'lucide-vue-next'
 
@@ -40,9 +40,11 @@ const toggleLikeCurrentPhoto = (e: Event) => {
   if (idx > -1) {
     // 이미 좋아요 함 -> 해제
     likedPhotoIds.value.splice(idx, 1)
+    updatePhotoLikes(photoId, -1)
   } else {
     // 좋아요 추가 (1인 1회)
     likedPhotoIds.value.push(photoId)
+    updatePhotoLikes(photoId, 1)
   }
 
   try {
@@ -674,29 +676,32 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 5. Story Floating Like Button (오른쪽 하단에서 조금 위쪽에 배치) -->
-          <button
-            class="story-like-btn"
-            :class="{
-              'is-liked': isPhotoLiked(sortedPhotos[selectedIndex].id),
-              'ui-hidden': isHolding
-            }"
-            @pointerdown.stop
-            @pointerup.stop
-            @touchstart.stop
-            @touchend.stop
-            @click.stop="toggleLikeCurrentPhoto"
-            :title="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '좋아요 취소' : '좋아요'"
-            aria-label="좋아요"
+          <!-- 5. Story Floating Like Button with Count (오른쪽 하단에서 조금 위쪽에 배치) -->
+          <div
+            class="story-like-wrapper"
+            :class="{ 'ui-hidden': isHolding }"
           >
-            <Heart
-              :size="24"
-              :class="{ 'heart-pop': isPhotoLiked(sortedPhotos[selectedIndex].id) }"
-              :fill="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : 'none'"
-              :stroke="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : '#FFFFFF'"
-              :stroke-width="isPhotoLiked(sortedPhotos[selectedIndex].id) ? 2 : 2.2"
-            />
-          </button>
+            <button
+              class="story-like-btn"
+              :class="{ 'is-liked': isPhotoLiked(sortedPhotos[selectedIndex].id) }"
+              @pointerdown.stop
+              @pointerup.stop
+              @touchstart.stop
+              @touchend.stop
+              @click.stop="toggleLikeCurrentPhoto"
+              :title="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '좋아요 취소' : '좋아요'"
+              aria-label="좋아요"
+            >
+              <Heart
+                :size="24"
+                :class="{ 'heart-pop': isPhotoLiked(sortedPhotos[selectedIndex].id) }"
+                :fill="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : 'none'"
+                :stroke="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : '#FFFFFF'"
+                :stroke-width="isPhotoLiked(sortedPhotos[selectedIndex].id) ? 2 : 2.2"
+              />
+            </button>
+            <span class="story-like-count font-sans">{{ sortedPhotos[selectedIndex].likes || 0 }}</span>
+          </div>
         </div>
 
         <!-- Desktop External Navigation Arrows -->
@@ -905,9 +910,9 @@ onUnmounted(() => {
     right: max(68px, calc(env(safe-area-inset-right, 16px) + 52px)) !important;
   }
 
-  .story-like-btn {
-    bottom: max(40px, calc(env(safe-area-inset-bottom, 24px) + 32px)) !important;
-    right: max(18px, env(safe-area-inset-right, 18px)) !important;
+  .story-like-wrapper {
+    bottom: max(32px, calc(env(safe-area-inset-bottom, 24px) + 24px)) !important;
+    right: max(16px, env(safe-area-inset-right, 16px)) !important;
   }
 }
 
@@ -1155,13 +1160,29 @@ onUnmounted(() => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-/* 5. Floating Like Button in Story */
-.story-like-btn {
+/* 5. Floating Like Button & Count in Story */
+.story-like-wrapper {
   position: absolute;
-  bottom: 48px;
+  bottom: 40px;
   right: 22px;
-  width: 48px;
-  height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 45;
+  user-select: none;
+  touch-action: manipulation;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.story-like-wrapper.ui-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.story-like-btn {
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(8px);
@@ -1171,7 +1192,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 45;
   color: #FFFFFF;
   transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -1192,6 +1212,15 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.95);
   border-color: #FF3B30;
   box-shadow: 0 4px 18px rgba(255, 59, 48, 0.45);
+}
+
+.story-like-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.3px;
+  line-height: 1;
 }
 
 .heart-pop {
