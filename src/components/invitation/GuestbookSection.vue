@@ -9,6 +9,32 @@ const password = ref('')
 const message = ref('')
 const isSubmitting = ref(false)
 
+const MY_POSTS_STORAGE_KEY = 'wedding_my_guestbook_ids'
+
+// 내가 이 브라우저/기기에서 작성한 방명록 ID 목록 로드
+const loadMyPostIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(MY_POSTS_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch (_) {}
+  return []
+}
+
+const myPostIds = ref<string[]>(loadMyPostIds())
+
+const saveMyPostId = (id: string) => {
+  if (!myPostIds.value.includes(id)) {
+    myPostIds.value.push(id)
+    try {
+      localStorage.setItem(MY_POSTS_STORAGE_KEY, JSON.stringify(myPostIds.value))
+    } catch (_) {}
+  }
+}
+
+const isMyPost = (id: string) => {
+  return myPostIds.value.includes(id)
+}
+
 const ITEMS_PER_PAGE = 3
 const currentPage = ref(1)
 
@@ -57,11 +83,14 @@ const handleAddComment = () => {
 
   isSubmitting.value = true
   try {
-    addGuestbookEntry({
+    const created = addGuestbookEntry({
       author: author.value.trim(),
       password: password.value.trim(),
       message: message.value.trim()
     })
+    if (created && created.id) {
+      saveMyPostId(created.id)
+    }
     author.value = ''
     password.value = ''
     message.value = ''
@@ -153,6 +182,7 @@ const formatDate = (isoString: string) => {
           </div>
 
           <button
+            v-if="isMyPost(entry.id)"
             class="delete-btn"
             @click="handleDelete(entry.id)"
             title="메시지 삭제"

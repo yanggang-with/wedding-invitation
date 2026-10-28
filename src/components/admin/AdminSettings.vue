@@ -12,6 +12,8 @@ import {
   initCloudSubscriptions
 } from '../../services/storage'
 import { initFirebase, checkFirestoreStatus } from '../../services/firebase'
+import { sendKakaoNotification } from '../../services/kakaoNotify'
+import { loginKakaoAccount, disconnectKakaoAccount, refreshKakaoAccessToken } from '../../services/kakaoAuth'
 import {
   KeyRound,
   Cloud,
@@ -32,7 +34,13 @@ import {
   Copy,
   SlidersHorizontal,
   CheckSquare,
-  Camera
+  Camera,
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
+  Send,
+  LogOut,
+  Sparkles
 } from 'lucide-vue-next'
 
 
@@ -217,6 +225,122 @@ const handleToggleRsvpSection = async () => {
   } catch (err) {
     console.error('Failed to save RSVP visibility:', err)
   }
+}
+
+// KakaoTalk Notification Settings
+const isKakaoGuideOpen = ref(false)
+const kakaoKeySavedMsg = ref(false)
+const kakaoTestSending = ref(false)
+const kakaoTestResult = ref<{ ok: boolean; msg: string } | null>(null)
+const kakaoLoginLoading = ref(false)
+const kakaoLoginMsg = ref<{ ok: boolean; text: string } | null>(null)
+
+const isKakaoConnected = computed(() => {
+  return Boolean(adminSettings.value.kakaoRefreshToken || adminSettings.value.kakaoAccessToken)
+})
+
+const kakaoConnectedAccountName = computed(() => {
+  return adminSettings.value.kakaoConnectedAccount || '연동된 카카오 계정'
+})
+
+const toggleKakaoGuide = () => {
+  isKakaoGuideOpen.value = !isKakaoGuideOpen.value
+}
+
+const handleKakaoLogin = async () => {
+  kakaoLoginLoading.value = true
+  kakaoLoginMsg.value = null
+  try {
+    // 사용자가 저장을 안 눌렀더라도 입력값을 즉시 자동 저장
+    await handleSaveKakaoKey()
+    const res = await loginKakaoAccount()
+    kakaoLoginMsg.value = {
+      ok: res.success,
+      text: res.message
+    }
+  } catch (err: any) {
+    kakaoLoginMsg.value = {
+      ok: false,
+      text: `연동 오류: ${err.message || err}`
+    }
+  } finally {
+    kakaoLoginLoading.value = false
+  }
+}
+
+const handleKakaoDisconnect = async () => {
+  if (confirm('카카오 계정 연동을 해제하시겠습니까? 토큰 자동 갱신이 중단됩니다.')) {
+    await disconnectKakaoAccount()
+    kakaoLoginMsg.value = null
+  }
+}
+
+const handleManualRefreshToken = async () => {
+  kakaoLoginLoading.value = true
+  try {
+    const newToken = await refreshKakaoAccessToken()
+    if (newToken) {
+      alert('카카오 Access Token이 성공적으로 갱신되었습니다!')
+    } else {
+      alert('토큰 갱신에 실패했습니다. 카카오 계정을 다시 로그인 연동해주세요.')
+    }
+  } finally {
+    kakaoLoginLoading.value = false
+  }
+}
+
+const handleSaveKakaoKey = async () => {
+  try {
+    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      await forceUploadToCloud()
+    }
+    kakaoKeySavedMsg.value = true
+    setTimeout(() => {
+      kakaoKeySavedMsg.value = false
+    }, 2500)
+  } catch (err) {
+    console.error('Failed to save kakao key:', err)
+  }
+}
+
+const handleSendKakaoTest = async () => {
+  kakaoTestSending.value = true
+  kakaoTestResult.value = null
+  try {
+    const res = await sendKakaoNotification({
+      type: 'test',
+      authorOrSender: '관리자 테스트',
+      summary: '카카오톡 비즈니스 채널 알림 연동 테스트입니다.'
+    })
+    kakaoTestResult.value = {
+      ok: res.success,
+      msg: res.message
+    }
+  } catch (err: any) {
+    kakaoTestResult.value = {
+      ok: false,
+      msg: `발송 오류: ${err.message || err}`
+    }
+  } finally {
+    kakaoTestSending.value = false
+  }
+}
+
+const formatPhoneNumber = (val: string) => {
+  const clean = (val || '').replace(/[^0-9]/g, '')
+  if (clean.length < 4) return clean
+  if (clean.length < 8) return `${clean.slice(0, 3)}-${clean.slice(3)}`
+  if (clean.length < 11) return `${clean.slice(0, 3)}-${clean.slice(3, 6)}-${clean.slice(6, 10)}`
+  return `${clean.slice(0, 3)}-${clean.slice(3, 7)}-${clean.slice(7, 11)}`
+}
+
+const handlePhoneInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const formatted = formatPhoneNumber(target.value)
+  adminSettings.value.kakaoReceiverPhone = formatted
+  target.value = formatted
 }
 
 const handleToggleLiveSnapSection = async () => {
@@ -598,6 +722,290 @@ const handleToggleLiveSnapSection = async () => {
           </button>
         </div>
       </div>
+
+      <!-- 5. KakaoTalk Notification Settings -->
+      <div class="card-paper block-card kakao-setting-card">
+        <div class="block-title-row">
+          <MessageCircle :size="18" class="block-icon kakao-yellow" />
+          <h4 class="block-title font-serif">카카오톡 비즈니스 채널 알림 설정</h4>
+        </div>
+
+        <p class="block-desc">
+          하객들이 <strong>방명록 작성</strong>, <strong>참석여부(RSVP) 전달</strong>, <strong>본식촬영(현장스냅) 업로드</strong>를 완료했을 때 비즈니스 채널을 통해 신랑·신부님의 카카오톡 또는 휴대폰으로 즉시 알림 메시지를 전송합니다.
+        </p>
+
+        <!-- 원클릭 카카오 계정 연동 및 토큰 자동 갱신 배너 -->
+        <div class="kakao-connect-banner" :class="{ 'is-connected': isKakaoConnected }">
+          <div class="banner-status-col">
+            <div class="banner-title-row">
+              <span class="status-indicator-dot" :class="{ active: isKakaoConnected }"></span>
+              <span class="banner-main-title font-serif">
+                {{ isKakaoConnected ? '카카오 알림 계정 연동 완료' : '카카오 1회 로그인으로 토큰 자동 갱신' }}
+              </span>
+              <span v-if="isKakaoConnected" class="auto-badge">
+                <Sparkles :size="12" />
+                <span>자동 갱신 활성화 중</span>
+              </span>
+            </div>
+            <p class="banner-sub-desc">
+              {{ isKakaoConnected 
+                ? `계정: [${kakaoConnectedAccountName}] - 토큰이 만료되어도 백그라운드에서 Refresh Token으로 새 토큰을 자동 충전합니다.` 
+                : '최초 1회만 로그인 연동해 두시면 6시간마다 토큰을 복사할 필요 없이 시스템이 알아서 새 토큰을 영구 자동 갱신합니다.' }}
+            </p>
+          </div>
+
+          <div class="banner-action-col">
+            <button 
+              v-if="!isKakaoConnected"
+              type="button" 
+              class="btn-kakao-login" 
+              :disabled="kakaoLoginLoading"
+              @click="handleKakaoLogin"
+            >
+              <RefreshCw v-if="kakaoLoginLoading" :size="15" class="spin-anim" />
+              <MessageCircle v-else :size="16" />
+              <span>{{ kakaoLoginLoading ? '연동 중...' : '카카오 계정 1회 연동하기' }}</span>
+            </button>
+
+            <div v-else class="connected-btn-group">
+              <button 
+                type="button" 
+                class="btn-tool-small" 
+                :disabled="kakaoLoginLoading"
+                @click="handleManualRefreshToken"
+              >
+                <RefreshCw :size="12" :class="{ 'spin-anim': kakaoLoginLoading }" />
+                <span>토큰 즉시 갱신</span>
+              </button>
+              <button 
+                type="button" 
+                class="btn-tool-small danger" 
+                @click="handleKakaoDisconnect"
+              >
+                <LogOut :size="12" />
+                <span>연동 해제</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="kakaoLoginMsg" class="test-result-box" :class="kakaoLoginMsg.ok ? 'success' : 'error'">
+          <CheckCircle2 v-if="kakaoLoginMsg.ok" :size="16" class="flex-shrink-0" />
+          <AlertCircle v-else :size="16" class="flex-shrink-0" />
+          <span class="test-msg" style="white-space: pre-line;">{{ kakaoLoginMsg.text }}</span>
+        </div>
+
+        <!-- 카카오 Web 플랫폼 등록 도메인 안내 박스 -->
+        <div class="kakao-domain-tip-box">
+          <div class="domain-tip-text">
+            <strong>⚠️ 카카오 Web 플랫폼 사이트 도메인 등록 필수</strong>
+            <p>카카오 디벨로퍼스 ➔ [앱 설정] ➔ [플랫폼] ➔ [Web]에 아래 접속 주소를 등록해야 로그인이 허용됩니다.</p>
+          </div>
+          <div class="host-url-box">
+            <span class="host-url-label">현재 브라우저 주소:</span>
+            <code class="host-url-code">{{ currentHostUrl }}</code>
+            <button type="button" class="btn-copy-small" @click="copyHostUrl">
+              <Check v-if="urlCopied" :size="12" class="text-green" />
+              <Copy v-else :size="12" />
+              <span>{{ urlCopied ? '복사됨!' : '주소 복사' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 카카오 앱 키 설정 (JavaScript 키 & REST API 키) -->
+        <div class="kakao-form-grid">
+          <div class="form-group">
+            <div class="label-with-action">
+              <label class="form-label">카카오 JavaScript 키</label>
+              <a
+                href="https://developers.kakao.com/console/app"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ext-link-btn"
+              >
+                <span>앱 키 확인</span>
+                <ExternalLink :size="12" />
+              </a>
+            </div>
+            <input
+              v-model="adminSettings.kakaoJavascriptKey"
+              type="text"
+              placeholder="카카오 개발자 콘솔의 JavaScript 키 (로그인 연동용)"
+              class="input-field font-mono"
+            />
+            <p class="field-hint">* 카카오 1회 로그인 팝업 연동 시 사용됩니다.</p>
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-action">
+              <label class="form-label">카카오 REST API Key</label>
+              <a
+                href="https://developers.kakao.com/tool/rest-api/open/get/v2-user-me"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ext-link-btn"
+              >
+                <span>REST API 도구</span>
+                <ExternalLink :size="12" />
+              </a>
+            </div>
+            <input
+              v-model="adminSettings.kakaoRestApiKey"
+              type="text"
+              placeholder="카카오 개발자 콘솔의 REST API 키 (자동 갱신용)"
+              class="input-field font-mono"
+            />
+            <p class="field-hint">* 백그라운드 토큰 자동 갱신 및 메시지 발송에 사용됩니다.</p>
+          </div>
+        </div>
+
+        <!-- 비즈니스 채널 및 알림 기본 설정 폼 -->
+        <div class="kakao-form-grid">
+          <div class="form-group">
+            <div class="label-with-action">
+              <label class="form-label">카카오톡 채널 검색용 아이디</label>
+              <a
+                href="https://center-pf.kakao.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ext-link-btn"
+              >
+                <span>채널 관리자센터</span>
+                <ExternalLink :size="12" />
+              </a>
+            </div>
+            <input
+              v-model="adminSettings.kakaoChannelId"
+              type="text"
+              placeholder="예: @우리결혼청첩장 또는 채널ID"
+              class="input-field font-mono"
+            />
+            <p class="field-hint">* 개설하신 카카오톡 채널의 검색용 홈 ID(@아이디)를 입력하세요.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">알림 수신 휴대폰 번호</label>
+            <input
+              :value="adminSettings.kakaoReceiverPhone"
+              type="tel"
+              maxlength="13"
+              placeholder="예: 010-1234-5678"
+              class="input-field font-mono"
+              @input="handlePhoneInput"
+            />
+            <p class="field-hint">* 알림을 수신할 신랑 또는 신부님의 휴대폰 번호입니다. (숫자만 입력 시 자동 포맷)</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">웹훅 URL (Make, Zapier, Cloud Function 등 연동 시 / 선택사항)</label>
+          <input
+            v-model="adminSettings.kakaoWebhookUrl"
+            type="text"
+            placeholder="예: https://hook.eu1.make.com/... 또는 사용자 지정 웹훅 URL"
+            class="input-field font-mono"
+          />
+          <p class="field-hint">
+            * 웹훅 URL이 등록되어 있으면 토큰 만료 없이 웹훅을 통해 비즈니스 채널 메시지가 가장 안정적으로 발송됩니다.
+          </p>
+        </div>
+
+        <div class="kakao-btn-row">
+          <button class="btn-primary sub-btn" @click="handleSaveKakaoKey">
+            <Check v-if="kakaoKeySavedMsg" :size="15" />
+            <Save v-else :size="15" />
+            <span>{{ kakaoKeySavedMsg ? '카카오 설정 저장 완료!' : '카카오 설정 저장' }}</span>
+          </button>
+
+          <button 
+            type="button" 
+            class="btn-tool kakao-test-btn" 
+            :disabled="kakaoTestSending" 
+            @click="handleSendKakaoTest"
+          >
+            <RefreshCw v-if="kakaoTestSending" :size="14" class="spin-anim" />
+            <Send v-else :size="14" />
+            <span>{{ kakaoTestSending ? '테스트 발송 중...' : '알림 테스트 전송해보기' }}</span>
+          </button>
+        </div>
+
+        <!-- 테스트 발송 결과 피드백 -->
+        <div v-if="kakaoTestResult" class="test-result-box" :class="kakaoTestResult.ok ? 'success' : 'error'">
+          <CheckCircle2 v-if="kakaoTestResult.ok" :size="16" class="flex-shrink-0" />
+          <AlertCircle v-else :size="16" class="flex-shrink-0" />
+          <span class="test-msg">{{ kakaoTestResult.msg }}</span>
+        </div>
+
+        <!-- 카카오톡 비즈니스 채널 연동 가이드 접고 펼치기 -->
+        <div class="kakao-guide-collapsible">
+          <div class="guide-accordion-header" @click="toggleKakaoGuide">
+            <div class="guide-header-title">
+              <span class="guide-bulb-icon">💡</span>
+              <span class="guide-title-text font-serif">비즈니스 채널 연결 & 알림 연동 가이드</span>
+              <span class="guide-toggle-badge">{{ isKakaoGuideOpen ? '가이드 접기' : '가이드 펼쳐보기' }}</span>
+            </div>
+            <button type="button" class="guide-toggle-arrow" aria-label="가이드 열기/닫기">
+              <ChevronUp v-if="isKakaoGuideOpen" :size="16" />
+              <ChevronDown v-else :size="16" />
+            </button>
+          </div>
+
+          <Transition name="collapse-slide">
+            <div v-show="isKakaoGuideOpen" class="guide-accordion-body">
+              <div class="guide-steps-list">
+                <!-- Step 1 -->
+                <div class="guide-step-item">
+                  <div class="step-num-badge">STEP 1</div>
+                  <div class="step-content">
+                    <h6 class="step-heading">카카오 개발자 콘솔에 비즈니스 채널 연결하기</h6>
+                    <p class="step-desc">
+                      1. <a href="https://developers.kakao.com/" target="_blank" rel="noopener noreferrer" class="text-link">카카오 디벨로퍼스</a> 접속 ➔ 내 애플리케이션 클릭<br />
+                      2. 좌측 메뉴 <strong>[앱 설정] ➔ [카카오톡 채널]</strong>로 이동합니다.<br />
+                      3. <strong>[카카오톡 채널 연결]</strong>을 클릭하여 방금 생성하신 비즈니스 채널을 검색 후 연결합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="guide-step-item highlight-step">
+                  <div class="step-num-badge gold">STEP 2</div>
+                  <div class="step-content">
+                    <h6 class="step-heading">채널 아이디 및 수신 휴대폰 번호 등록</h6>
+                    <p class="step-desc">
+                      1. <a href="https://center-pf.kakao.com/" target="_blank" rel="noopener noreferrer" class="text-link">카카오톡 채널 관리자센터</a>에서 채널의 <strong>홈 ID(검색용 아이디)</strong>를 확인합니다.<br />
+                      2. 위 설정 화면의 <code>카카오톡 채널 검색용 아이디</code>와 <code>알림 수신 휴대폰 번호</code>에 각각 입력합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="guide-step-item">
+                  <div class="step-num-badge">STEP 3</div>
+                  <div class="step-content">
+                    <h6 class="step-heading">전송 키 등록 (Access Token 또는 Webhook)</h6>
+                    <p class="step-desc">
+                      • <strong>카카오 공식 테스트 도구 활용</strong>: 카카오 디벨로퍼스 [도구] ➔ [REST API 테스트] ➔ [토큰 발급]에서 발급받은 Access Token을 복사하여 위 입력창에 등록합니다.<br />
+                      • <strong>무료 웹훅(Webhook) 활용 (영구 유효/강력 추천)</strong>: Make(구 Integromat), Zapier 등에서 Webhook URL을 생성하여 등록하면 토큰 만료 없이 영구적으로 신랑·신부님에게 실시간 푸시가 전달됩니다.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="guide-step-item">
+                  <div class="step-num-badge">STEP 4</div>
+                  <div class="step-content">
+                    <h6 class="step-heading">[알림 테스트 전송해보기] 버튼으로 검증</h6>
+                    <p class="step-desc">
+                      설정을 저장한 후 바로 위의 <strong>[알림 테스트 전송해보기]</strong> 버튼을 누르면 즉시 알림 발송을 시도하고 상태(성공 또는 구체적 에러 메시지)를 화면에서 바로 확인하실 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+      </div>
+
 
       <!-- 5. Reset Factory Sample Data -->
       <div class="card-paper block-card danger-zone">
@@ -1247,5 +1655,428 @@ input:checked + .slider:before {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+/* KakaoTalk Notification Section Styles */
+.block-icon.kakao-yellow {
+  color: #3A1D1D;
+  background: #FEE500;
+  border-radius: 6px;
+  padding: 3px;
+}
+
+.clickable-title-row {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: opacity 0.15s;
+}
+
+.clickable-title-row:hover {
+  opacity: 0.9;
+}
+
+.title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-badge {
+  font-size: 11px;
+  background: rgba(254, 229, 0, 0.35);
+  color: #3A1D1D;
+  border: 1px solid rgba(254, 229, 0, 0.8);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+
+.collapse-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.collapsible-content {
+  margin-top: 16px;
+}
+
+.collapse-slide-enter-active,
+.collapse-slide-leave-active {
+  transition: all 0.25s ease;
+}
+
+.collapse-slide-enter-from,
+.collapse-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.kakao-connect-banner {
+  background: #FFFDF0;
+  border: 1px solid #FEE500;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.25s ease;
+}
+
+.kakao-connect-banner.is-connected {
+  background: #F4FAF5;
+  border-color: #34A853;
+}
+
+.banner-status-col {
+  flex: 1;
+}
+
+.banner-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #BDBDBD;
+  flex-shrink: 0;
+}
+
+.status-indicator-dot.active {
+  background: #34A853;
+  box-shadow: 0 0 6px rgba(52, 168, 83, 0.6);
+}
+
+.banner-main-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #3A1D1D;
+}
+
+.auto-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(52, 168, 83, 0.12);
+  color: #1E7E34;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.banner-sub-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-sub, #6E6259);
+  margin: 0;
+}
+
+.banner-action-col {
+  flex-shrink: 0;
+}
+
+.btn-kakao-login {
+  background: #FEE500;
+  color: #3A1D1D;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(58, 29, 29, 0.1);
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.btn-kakao-login:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.btn-kakao-login:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.connected-btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-tool-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color, #E8E2D9);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-tool-small:hover {
+  background: #FAF8F5;
+  border-color: #D4AF37;
+}
+
+.btn-tool-small.danger {
+  color: #D32F2F;
+}
+
+.btn-tool-small.danger:hover {
+  background: #FFEBEE;
+  border-color: #FFCDD2;
+}
+
+@media (max-width: 640px) {
+  .kakao-connect-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .banner-action-col {
+    width: 100%;
+    margin-top: 6px;
+  }
+  .btn-kakao-login {
+    width: 100%;
+    justify-content: center;
+  }
+  .connected-btn-group {
+    width: 100%;
+  }
+  .connected-btn-group .btn-tool-small {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.kakao-domain-tip-box {
+  background: #FFFDF5;
+  border: 1px dashed rgba(212, 175, 55, 0.6);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.domain-tip-text strong {
+  display: block;
+  font-size: 12px;
+  color: #3A1D1D;
+  margin-bottom: 2px;
+}
+
+.domain-tip-text p {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.kakao-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .kakao-form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.kakao-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.kakao-test-btn {
+  background: #FFFDF5;
+  border-color: rgba(212, 175, 55, 0.5);
+  color: #5C4B37;
+  font-weight: 600;
+}
+
+.kakao-test-btn:hover {
+  background: #FAF3E0;
+  border-color: #D4AF37;
+  color: #3A1D1D;
+}
+
+.kakao-guide-collapsible {
+  margin-top: 24px;
+  border: 1px solid var(--border-color, #E8E2D9);
+  border-radius: 10px;
+  background: #FAF8F5;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.kakao-guide-collapsible:hover {
+  border-color: #D4AF37;
+}
+
+.guide-accordion-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(254, 229, 0, 0.08);
+  transition: background 0.2s ease;
+}
+
+.guide-accordion-header:hover {
+  background: rgba(254, 229, 0, 0.16);
+}
+
+.guide-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guide-bulb-icon {
+  font-size: 16px;
+}
+
+.guide-title-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #3A1D1D;
+}
+
+.guide-toggle-badge {
+  font-size: 11px;
+  background: #FEE500;
+  color: #3A1D1D;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 4px;
+}
+
+.guide-toggle-arrow {
+  background: none;
+  border: none;
+  color: #3A1D1D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.guide-accordion-body {
+  padding: 16px 18px 20px;
+  border-top: 1px solid var(--border-color, #E8E2D9);
+  background: #FFFFFF;
+}
+
+.guide-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.guide-step-item {
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #FAF8F5;
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #EDE8E1);
+  transition: background 0.2s ease;
+}
+
+.guide-step-item.highlight-step {
+  background: #FFFDF5;
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+.step-num-badge {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  background: #4A4036;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
+
+.step-num-badge.gold {
+  background: #D4AF37;
+  color: #FFFFFF;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main, #2D241E);
+  margin: 0 0 6px 0;
+}
+
+.step-desc {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-sub, #6E6259);
+  margin: 0;
+}
+
+.step-desc code {
+  background: #EDE8E1;
+  color: #3A1D1D;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.step-desc .text-link {
+  color: #1A73E8;
+  text-decoration: underline;
+  font-weight: 600;
 }
 </style>

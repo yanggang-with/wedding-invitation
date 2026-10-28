@@ -371,5 +371,93 @@
   - `WeddingDayCalligraphy.vue`에서 `Day` 페이드인이 선명해지는 시점(2.85s + 0.35s)에 바로 `@complete` 이벤트가 트리거되도록 약 300ms 앞당김.
   - `CoverSection.vue`의 전환 대기 딜레이를 300ms에서 60ms로 대폭 단축하여, 손글씨 작성이 끝나자마자 지체 없이 경쾌하고 부드럽게 상단 슬라이드업 상승이 시작되도록 템포 조정.
 
+---
+
+### 31차 요청: 카카오톡 알림 전송 연동 및 설정 UI 추가, 방명록 본인 글만 삭제 버튼 노출, 웨딩사진 스토리 좋아요(하트) 토글 기능
+- **<카카오톡 알림 전송 파이프라인 및 관리자 설정 연동 가이드 (`AdminSettings.vue`, `kakaoNotify.ts`, `storage.ts`)>**:
+  - 관리자 설정 탭에 카카오톡 알림 전송 설정 블록 추가.
+  - 방명록 등록, 참석여부(RSVP) 전달, 본식촬영(현장스냅) 업로드 이벤트 발생 시 자동으로 호출되는 카카오톡 알림 파이프라인 구축 (`sendKakaoNotification`).
+- **<방명록 본인 작성글 전용 삭제 버튼 제어 (`GuestbookSection.vue`)>**:
+  - 글 작성 완료 시 생성된 고유 ID를 브라우저 로컬스토리지(`wedding_my_guestbook_ids`)에 안전하게 저장.
+  - 방명록 피드 목록에서 **오직 본인이 작성한 글에만 삭제(휴지통) 버튼이 나타나도록** 조건부 렌더링 적용 (`v-if="isMyPost(entry.id)"`).
+  - 타인의 축하글에는 삭제 버튼 자체가 아예 보이지 않도록 UI 보호.
+- **<웨딩사진 스토리 좋아요(하트) 토글 기능 (`GallerySection.vue`)>**:
+  - 스토리 뷰어 화면의 우측 하단 위쪽(자막 스티커와 겹치지 않는 최적 위치)에 둥근 플로팅 하트 버튼 배치.
+  - 1인 1회 좋아요 토글 시스템 (`wedding_photo_liked_ids` 로컬스토리지 연동): 이미 좋아요한 사진은 빨간색 채워진 하트(`is-liked`, `#FF3B30`), 다시 누르면 취소되어 흰색 라인 하트로 토글.
+  - 좋아요 버튼 클릭 시 스토리의 좌우 탭 네비게이션이 동작하여 다음 사진으로 넘어가는 현상을 이벤트 캡처 차단(`@pointerdown.stop`, `@click.stop` 등)으로 완벽 방지.
+
+---
+
+### 32차 요청: 카카오톡 연동 설정 UI 구조 개선 및 REST API Key 발급 상세 가이드 제공
+- **<카카오톡 설정 카드 UI 구조 최적화 (`AdminSettings.vue`)>**:
+  - 카카오 설정 카드 전체를 접는 대신, **'카카오 REST API Key' 입력 필드 및 저장 버튼은 상시 기본 노출**되도록 구조 변경.
+  - 하단의 **'카카오톡 REST API Key 가져오는 방법' 안내 설명서 영역만 접고 펼칠 수 있는(Collapsible Accordion) UI**로 분리 구성 (`isKakaoGuideOpen`, `toggleKakaoGuide`).
+- **<카카오 개발자 콘솔 단계별 REST API Key 획득 가이드 상세화 (`AdminSettings.vue`)>**:
+  - 기존 3가지 방식(텔레그램 대안 등) 소개를 제거하고, 실제 카카오 디벨로퍼스(developers.kakao.com)에서 REST API Key를 어디서 확인하고 복사해 오는지 구체적인 Step-by-step 안내로 전면 개편:
+    - **STEP 1**: 카카오 디벨로퍼스 접속 및 애플리케이션 추가하기
+    - **STEP 2**: [앱 설정] ➔ [앱 키] 메뉴에서 32자리 'REST API 키' 복사 및 설정 입력
+    - **STEP 3**: [플랫폼] ➔ [Web 플랫폼 등록]에서 사이트 도메인(`oppsjw.github.io` 등) 등록
+    - **STEP 4**: [카카오 로그인] 활성화 및 [동의항목]에서 `talk_message`(카카오톡 메시지 전송) 권한 설정
+
+---
+
+### 33차 요청: 카카오톡 비즈니스 채널 연동, 알림 설정 및 테스트 발송 기능 고도화
+- **<카카오톡 비즈니스 채널 설정 폼 추가 (`AdminSettings.vue`, `wedding.ts`)>**:
+  - 카카오톡 채널 검색용 홈 ID(`kakaoChannelId`, 예: `@우리청첩장`) 및 알림 수신 휴대폰 번호(`kakaoReceiverPhone`) 필드 추가.
+  - 카카오 REST API 키/액세스 토큰 외에도 영구적이고 안정적인 연동을 위한 **웹훅 URL(`kakaoWebhookUrl`)** 및 알림톡 발송 지원 필드 탑재.
+- **<알림 테스트 전송 및 즉시 피드백 기능 (`AdminSettings.vue`, `kakaoNotify.ts`)>**:
+  - 설정 후 즉시 발송 상태를 점검할 수 있는 **[알림 테스트 전송해보기]** 버튼 및 성공/실패 결과 피드백 배너 컴포넌트 추가.
+  - 401 Unauthorized 등 토큰 인증 오류 발생 시 직관적인 해결 가이드 메시지 리턴.
+- **<비즈니스 채널 연결 & 알림 연동 가이드 개편 (`AdminSettings.vue`)>**:
+  - 카카오톡 채널 관리자센터와 카카오 디벨로퍼스 앱의 [카카오톡 채널 연결] 방법 및 테스트 절차를 체계적인 4단계 매뉴얼로 제공.
+
+---
+
+### 34차 요청: 403 insufficient scopes(-402) 권한 해결 가이드 및 수신 휴대폰 번호 자동 하이픈 포매팅 적용
+- **<카카오 403 / -402 Scope 권한 오류 메시지 고도화 (`kakaoNotify.ts`)>**:
+  - `talk_message` 미동의로 인한 `-402 insufficient scopes` 오류 발생 시, 원인과 콘솔 동의항목 활성화 경로를 안내하는 직관적 메시지 반환.
+- **<휴대폰 번호 입력 시 실시간 자동 하이픈 포매팅 (`AdminSettings.vue`)>**:
+  - `kakaoReceiverPhone` 입력 필드에 실시간 숫자 정제 및 3-4-4(또는 3-3-4) 형태 자동 하이픈 삽입 이벤트(`handlePhoneInput`, `formatPhoneNumber`) 적용.
+  - 모바일 키패드 최적화(`type="tel"`, `maxlength="13"`).
+
+---
+
+### 35차 요청: 카카오 계정 원클릭 1회 로그인 연동 및 Refresh Token 기반 백그라운드 토큰 영구 자동 갱신(Auto Refresh) 구현
+- **<카카오 OAuth2 토큰 자동 갱신 모듈 구축 (`kakaoAuth.ts`)>**:
+  - `Kakao.Auth.login`을 통한 1회 로그인으로 `access_token`과 함께 2달 유효한 `refresh_token` 발급 및 안전 저장.
+  - 카카오 인증 서버(`kauth.kakao.com/oauth/token`)와 연동하여 만료(6시간) 도래 또는 알림 발송 직전 백그라운드에서 새 토큰으로 자동 연장하는 `refreshKakaoAccessToken()` 구현.
+  - `getValidKakaoToken()`을 통해 항상 최신 유효 토큰을 공급하도록 보장.
+- **<관리자 페이지 원클릭 연동 배너 UI (`AdminSettings.vue`)>**:
+  - 복잡한 수동 토큰 복사 없이 버튼 한 번으로 계정을 연동할 수 있는 **[카카오 계정 1회 연동하기]** 카드 배너 탑재.
+  - 연동 완료 시 '자동 갱신 활성화 중 ✨' 뱃지, 연동 계정명, [토큰 즉시 갱신], [연동 해제] 버튼 제공.
+- **<실시간 알림 파이프라인 자동 토큰 공급 (`kakaoNotify.ts`)>**:
+  - 방명록, RSVP, 본식스냅 등록 및 테스트 발송 시 자동으로 최신 유효 토큰을 검증 및 갱신하여 401 오류 원천 차단.
+
+---
+
+### 36차 요청: 카카오 로그인 client_id is not valid 오류 해결 및 SDK v2 최신화
+- **<카카오 JavaScript SDK v2 최신 공식 번들 적용 (`index.html`)>**:
+  - 기존 SDK 링크를 카카오 공식 v2(`https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js`)로 교체하여 인증 호환성 확보.
+- **<JavaScript 키 필수 검증 및 자동 저장 보강 (`kakaoAuth.ts`, `AdminSettings.vue`)>**:
+  - REST API 키가 JavaScript SDK의 client_id로 오작동하는 것을 방지하고, 32자리 'JavaScript 키' 전용 초기화 로직 구현.
+  - 연동 버튼 클릭 시 입력된 키를 즉시 자동 저장(`handleSaveKakaoKey`)하여 미저장으로 인한 빈 키 오류 차단.
+  - `client_id is not valid` 오류 발생 시 콘솔 등록 및 JavaScript 키 점검 가이드 즉시 피드백.
+
+---
+
+### 37차 요청: Kakao.Auth.login is not a function 팝업 인증 SDK 복구 및 401 오류 해결 가이드
+- **<카카오 팝업 로그인 정식 SDK 복원 (`index.html`, `kakaoAuth.ts`)>**:
+  - 카카오 v2 SDK에서 폐지된 팝업 로그인(`Kakao.Auth.login`)을 정상 지원하는 카카오 정식 v1 SDK(`https://developers.kakao.com/sdk/js/kakao.min.js`)로 복원.
+  - `kakao.Auth.login` 함수 유무를 사전에 안전 검증하여 브라우저 캐시로 인한 런타임 예외 방어.
+- **<테스트 발송 401 Unauthorized 원인 명확화 및 토큰 발급/연동 프로세스 동기화 (`kakaoNotify.ts`)>**:
+  - 1회 인증 전 REST API 키로 발송 시도 시 발생하는 401 에러 원인 안내 및 1회 연동 성공 후 Access Token 자동 공급 파이프라인 연동.
+
+---
+
+### 38차 요청: Javascript env validation failed 도메인 불일치 오류 해결 및 원클릭 주소 복사 UI 탑재
+- **<도메인 검증 실패 오류 가로채기 및 직관적 해결 안내 (`kakaoAuth.ts`)>**:
+  - `Javascript env validation failed` 오류 감지 시, 현재 브라우저의 실제 호스트 주소(`window.location.origin`)를 명시하여 카카오 콘솔 [플랫폼 > Web] 등록 절차를 알기 쉽게 피드백.
+- **<카카오 전용 접속 주소 원클릭 복사 배너 추가 (`AdminSettings.vue`)>**:
+  - 카카오 설정 카드 상단에 현재 접속 도메인 표기 및 [주소 복사] 버튼 배너(`.kakao-domain-tip-box`) 배치로 오타/불일치 원천 방지.
 
 

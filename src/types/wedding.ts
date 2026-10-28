@@ -8,6 +8,7 @@ export interface PhotoItem {
   order: number
   createdAt: string
   objectPosition?: string // e.g. "50% 20%"
+  likes?: number
 }
 
 export interface PersonInfo {
@@ -122,5 +123,18 @@ export interface AdminSettings {
   useGoogleDriveStorage?: boolean
   allowedGoogleEmails?: string[]
   naverMapClientId?: string
+  kakaoRestApiKey?: string
+  kakaoJavascriptKey?: string
+  kakaoAccessToken?: string
+  kakaoRefreshToken?: string
+  kakaoTokenExpiresAt?: number
+  kakaoConnectedAccount?: string
+  kakaoChannelId?: string
+  kakaoReceiverPhone?: string
+  kakaoNotifyType?: 'alimtalk' | 'webhook' | 'direct'
+  kakaoSenderKey?: string
+  kakaoAlimtalkApiKey?: string
+  kakaoAlimtalkSecret?: string
+  kakaoWebhookUrl?: string
 }
 

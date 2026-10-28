@@ -9,6 +9,7 @@ import {
   DEFAULT_LIVE_SNAPS
 } from '../constants/initialData'
 import { encryptPassword, verifyPassword } from '../utils/crypto'
+import { sendKakaoNotification } from './kakaoNotify'
 import {
   initFirebase,
   uploadToFirebaseStorage,
@@ -379,6 +380,13 @@ export function addRsvpResponse(rsvp: Omit<RsvpItem, 'id' | 'createdAt'>) {
   if (isFirestoreReady()) {
     saveRsvpDoc(newItem).catch(err => console.warn('RSVP Firestore 저장 실패:', err))
   }
+  // 카카오톡 알림 전송 (참석여부 등록)
+  sendKakaoNotification({
+    type: 'rsvp',
+    authorOrSender: newItem.guestName,
+    summary: `${newItem.side === 'groom' ? '신랑측' : '신부측'} / ${newItem.isAttending ? '참석' : '불참'} (${newItem.guestCount}명, 식사 ${newItem.mealNeeded ? '예정' : '안함'})`,
+    details: newItem.message ? `전달 메시지: "${newItem.message}"` : undefined
+  }).catch(() => {})
   return newItem
 }
 
@@ -407,6 +415,12 @@ export function addGuestbookEntry(entry: Omit<GuestbookItem, 'id' | 'createdAt'>
   if (isFirestoreReady()) {
     saveGuestbookDoc(newItem).catch(err => console.warn('방명록 Firestore 저장 실패:', err))
   }
+  // 카카오톡 알림 전송 (방명록 작성)
+  sendKakaoNotification({
+    type: 'guestbook',
+    authorOrSender: newItem.author,
+    summary: newItem.message
+  }).catch(() => {})
   return newItem
 }
 
@@ -893,6 +907,12 @@ export function addLiveSnap(snap: Omit<LiveSnapItem, 'id' | 'createdAt'>): LiveS
   if (isFirestoreReady()) {
     saveLiveSnapDoc(newItem).catch(err => console.warn('현장스냅 Firestore 저장 실패:', err))
   }
+  // 카카오톡 알림 전송 (본식촬영/현장스냅 업로드)
+  sendKakaoNotification({
+    type: 'livesnap',
+    authorOrSender: newItem.senderName || '익명의 하객',
+    summary: `${newItem.type === 'video' ? '동영상' : '사진'}이 등록되었습니다.${newItem.message ? ` ("${newItem.message}")` : ''}`
+  }).catch(() => {})
   return newItem
 }
 

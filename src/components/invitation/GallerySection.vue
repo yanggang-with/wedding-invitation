@@ -2,13 +2,53 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { photos, weddingInfo, getOptimizedImageUrl, isStoryOpen } from '../../services/storage'
 import type { PhotoItem } from '../../types/wedding'
-import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause } from 'lucide-vue-next'
+import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause, Heart } from 'lucide-vue-next'
 
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
 const isMoreLoading = ref(false)
 const isInitialLoading = ref(true)
 const INITIAL_COUNT = 9
+
+// --- Photo Story Likes Management ---
+const LIKES_STORAGE_KEY = 'wedding_photo_liked_ids'
+const loadLikedPhotoIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(LIKES_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch (_) {}
+  return []
+}
+
+const likedPhotoIds = ref<string[]>(loadLikedPhotoIds())
+
+const isPhotoLiked = (photoId: string) => {
+  return likedPhotoIds.value.includes(photoId)
+}
+
+const toggleLikeCurrentPhoto = (e: Event) => {
+  e.stopPropagation()
+  e.preventDefault()
+
+  if (selectedIndex.value === null) return
+  const currentPhoto = sortedPhotos.value[selectedIndex.value]
+  if (!currentPhoto) return
+
+  const photoId = currentPhoto.id
+  const idx = likedPhotoIds.value.indexOf(photoId)
+
+  if (idx > -1) {
+    // 이미 좋아요 함 -> 해제
+    likedPhotoIds.value.splice(idx, 1)
+  } else {
+    // 좋아요 추가 (1인 1회)
+    likedPhotoIds.value.push(photoId)
+  }
+
+  try {
+    localStorage.setItem(LIKES_STORAGE_KEY, JSON.stringify(likedPhotoIds.value))
+  } catch (_) {}
+}
 
 // --- Thumbnail Loading Delay Optimization ---
 const loadedThumbnails = ref<Record<string, boolean>>({})
@@ -633,6 +673,30 @@ onUnmounted(() => {
               <span>{{ sortedPhotos[selectedIndex].caption }}</span>
             </div>
           </div>
+
+          <!-- 5. Story Floating Like Button (오른쪽 하단에서 조금 위쪽에 배치) -->
+          <button
+            class="story-like-btn"
+            :class="{
+              'is-liked': isPhotoLiked(sortedPhotos[selectedIndex].id),
+              'ui-hidden': isHolding
+            }"
+            @pointerdown.stop
+            @pointerup.stop
+            @touchstart.stop
+            @touchend.stop
+            @click.stop="toggleLikeCurrentPhoto"
+            :title="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '좋아요 취소' : '좋아요'"
+            aria-label="좋아요"
+          >
+            <Heart
+              :size="24"
+              :class="{ 'heart-pop': isPhotoLiked(sortedPhotos[selectedIndex].id) }"
+              :fill="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : 'none'"
+              :stroke="isPhotoLiked(sortedPhotos[selectedIndex].id) ? '#FF3B30' : '#FFFFFF'"
+              :stroke-width="isPhotoLiked(sortedPhotos[selectedIndex].id) ? 2 : 2.2"
+            />
+          </button>
         </div>
 
         <!-- Desktop External Navigation Arrows -->
@@ -838,7 +902,12 @@ onUnmounted(() => {
   .story-caption-wrapper {
     bottom: max(24px, calc(env(safe-area-inset-bottom, 24px) + 16px)) !important;
     left: max(16px, env(safe-area-inset-left, 16px)) !important;
-    right: max(16px, env(safe-area-inset-right, 16px)) !important;
+    right: max(68px, calc(env(safe-area-inset-right, 16px) + 52px)) !important;
+  }
+
+  .story-like-btn {
+    bottom: max(40px, calc(env(safe-area-inset-bottom, 24px) + 32px)) !important;
+    right: max(18px, env(safe-area-inset-right, 18px)) !important;
   }
 }
 
@@ -1084,6 +1153,61 @@ onUnmounted(() => {
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* 5. Floating Like Button in Story */
+.story-like-btn {
+  position: absolute;
+  bottom: 48px;
+  right: 22px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 45;
+  color: #FFFFFF;
+  transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.story-like-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+  transform: scale(1.08);
+}
+
+.story-like-btn:active {
+  transform: scale(0.9);
+}
+
+.story-like-btn.is-liked {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #FF3B30;
+  box-shadow: 0 4px 18px rgba(255, 59, 48, 0.45);
+}
+
+.heart-pop {
+  animation: heartPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes heartPulse {
+  0% {
+    transform: scale(0.6);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 5. Press & Hold State */
