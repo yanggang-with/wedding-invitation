@@ -25,16 +25,19 @@ const SESSION_DURATION_MS = 30 * 60 * 1000 // 30분 세션 유지
 
 function checkSession(): boolean {
   try {
-    const expiryStr = localStorage.getItem(SESSION_KEY)
+    // 과거 localStorage에 남아있던 잔여 세션 키 삭제
+    localStorage.removeItem(SESSION_KEY)
+
+    const expiryStr = sessionStorage.getItem(SESSION_KEY)
     if (!expiryStr) return false
     const expiry = parseInt(expiryStr, 10)
     if (Date.now() < expiry) {
       // 세션 유효: 활동 감지로 30분 연장
       const newExpiry = Date.now() + SESSION_DURATION_MS
-      localStorage.setItem(SESSION_KEY, newExpiry.toString())
+      sessionStorage.setItem(SESSION_KEY, newExpiry.toString())
       return true
     } else {
-      localStorage.removeItem(SESSION_KEY)
+      sessionStorage.removeItem(SESSION_KEY)
       return false
     }
   } catch (e) {
@@ -45,12 +48,13 @@ function checkSession(): boolean {
 function updateSession() {
   try {
     const newExpiry = Date.now() + SESSION_DURATION_MS
-    localStorage.setItem(SESSION_KEY, newExpiry.toString())
+    sessionStorage.setItem(SESSION_KEY, newExpiry.toString())
   } catch (e) {}
 }
 
 function clearSession() {
   try {
+    sessionStorage.removeItem(SESSION_KEY)
     localStorage.removeItem(SESSION_KEY)
   } catch (e) {}
 }

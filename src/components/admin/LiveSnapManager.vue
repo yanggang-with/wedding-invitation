@@ -41,7 +41,6 @@ const handleToggleSection = async () => {
     showLiveSnapSection: showSection.value
   }
   try {
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }

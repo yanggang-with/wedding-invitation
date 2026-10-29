@@ -84,8 +84,6 @@ const handleToggleRsvp = async () => {
   adminSettings.value.showRsvpSection = nextVal
 
   try {
-    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }

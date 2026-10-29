@@ -52,11 +52,6 @@ const formattedDatePreview = computed(() => {
 })
 
 const handleSave = () => {
-  try {
-    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
-  } catch (e) {
-    console.error('Failed to persist wedding info:', e)
-  }
   initialSnapshot = JSON.stringify(weddingInfo.value)
   isDirty.value = false
   savedNotice.value = true

@@ -197,7 +197,6 @@ const copyHostUrl = () => {
 
 const handleSaveNaverKey = async () => {
   try {
-    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }
@@ -217,8 +216,6 @@ const handleToggleRsvpSection = async () => {
   adminSettings.value.showRsvpSection = nextVal
 
   try {
-    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }
@@ -291,8 +288,6 @@ const handleManualRefreshToken = async () => {
 
 const handleSaveKakaoKey = async () => {
   try {
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
-    localStorage.setItem('wedding_info_v2', JSON.stringify(weddingInfo.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }
@@ -349,7 +344,6 @@ const handleToggleLiveSnapSection = async () => {
   adminSettings.value.showLiveSnapSection = nextVal
 
   try {
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       await forceUploadToCloud()
     }

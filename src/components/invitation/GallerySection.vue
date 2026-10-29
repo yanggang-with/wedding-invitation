@@ -14,7 +14,7 @@ const INITIAL_COUNT = 9
 const LIKES_STORAGE_KEY = 'wedding_photo_liked_ids'
 const loadLikedPhotoIds = (): string[] => {
   try {
-    const raw = localStorage.getItem(LIKES_STORAGE_KEY)
+    const raw = sessionStorage.getItem(LIKES_STORAGE_KEY)
     if (raw) return JSON.parse(raw)
   } catch (_) {}
   return []
@@ -48,7 +48,7 @@ const toggleLikeCurrentPhoto = (e: Event) => {
   }
 
   try {
-    localStorage.setItem(LIKES_STORAGE_KEY, JSON.stringify(likedPhotoIds.value))
+    sessionStorage.setItem(LIKES_STORAGE_KEY, JSON.stringify(likedPhotoIds.value))
   } catch (_) {}
 }
 
@@ -56,6 +56,42 @@ const toggleLikeCurrentPhoto = (e: Event) => {
 const loadedThumbnails = ref<Record<string, boolean>>({})
 const onThumbnailLoad = (id: string) => {
   loadedThumbnails.value[id] = true
+}
+
+const FALLBACK_GALLERY_PHOTOS = [
+  'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1532712938310-34cb3982ef74?auto=format&fit=crop&w=600&q=80'
+]
+
+const onThumbnailError = (e: Event, id: string, index: number) => {
+  loadedThumbnails.value[id] = true
+  const target = e.target as HTMLImageElement | null
+  if (target && !target.src.includes('images.unsplash.com')) {
+    target.src = FALLBACK_GALLERY_PHOTOS[index % FALLBACK_GALLERY_PHOTOS.length]
+  }
+}
+
+const onStoryImageError = (e: Event, index: number) => {
+  isStoryImageLoaded.value = true
+  const target = e.target as HTMLImageElement | null
+  if (target && !target.src.includes('images.unsplash.com')) {
+    target.src = FALLBACK_GALLERY_PHOTOS[index % FALLBACK_GALLERY_PHOTOS.length].replace('w=600', 'w=1200')
+  }
+}
+
+const onPeekImageError = (e: Event) => {
+  isPeekImageLoaded.value = true
+  const target = e.target as HTMLImageElement | null
+  if (target && !target.src.includes('images.unsplash.com')) {
+    target.src = FALLBACK_GALLERY_PHOTOS[0].replace('w=600', 'w=800')
+  }
 }
 const handleImgRef = (el: HTMLImageElement | null, id: string) => {
   if (el && el.complete && el.naturalWidth > 0) {
@@ -506,6 +542,7 @@ onUnmounted(() => {
           draggable="false"
           @contextmenu.prevent
           @load="onThumbnailLoad(photo.id)"
+          @error="onThumbnailError($event, photo.id, index)"
         />
       </div>
     </div>
@@ -551,6 +588,7 @@ onUnmounted(() => {
                 draggable="false"
                 @contextmenu.prevent
                 @load="isPeekImageLoaded = true"
+                @error="onPeekImageError"
               />
             </div>
             <div v-if="peekPhoto.caption" class="peek-caption font-serif">
@@ -661,6 +699,7 @@ onUnmounted(() => {
                 :class="{ 'is-loaded': isStoryImageLoaded }"
                 draggable="false"
                 @load="isStoryImageLoaded = true"
+                @error="onStoryImageError($event, selectedIndex ?? 0)"
               />
             </Transition>
           </div>

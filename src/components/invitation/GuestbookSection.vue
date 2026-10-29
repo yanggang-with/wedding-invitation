@@ -14,7 +14,7 @@ const MY_POSTS_STORAGE_KEY = 'wedding_my_guestbook_ids'
 // 내가 이 브라우저/기기에서 작성한 방명록 ID 목록 로드
 const loadMyPostIds = (): string[] => {
   try {
-    const raw = localStorage.getItem(MY_POSTS_STORAGE_KEY)
+    const raw = sessionStorage.getItem(MY_POSTS_STORAGE_KEY)
     if (raw) return JSON.parse(raw)
   } catch (_) {}
   return []
@@ -26,7 +26,7 @@ const saveMyPostId = (id: string) => {
   if (!myPostIds.value.includes(id)) {
     myPostIds.value.push(id)
     try {
-      localStorage.setItem(MY_POSTS_STORAGE_KEY, JSON.stringify(myPostIds.value))
+      sessionStorage.setItem(MY_POSTS_STORAGE_KEY, JSON.stringify(myPostIds.value))
     } catch (_) {}
   }
 }

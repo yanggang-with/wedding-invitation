@@ -32,50 +32,42 @@ import {
   checkFirestoreStatus
 } from './firebase'
 
-const STORAGE_KEYS = {
-  PHOTOS: 'wedding_photos_v2',
-  INFO: 'wedding_info_v2',
-  ACCOUNTS: 'wedding_accounts_v2',
-  RSVP: 'wedding_rsvp_v1',
-  GUESTBOOK: 'wedding_guestbook_v1',
-  SETTINGS: 'wedding_admin_settings_v2',
-  LIVESNAPS: 'wedding_livesnaps_v1'
-}
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const item = localStorage.getItem(key)
-    if (item) {
-      return JSON.parse(item)
-    }
-  } catch (e) {
-    console.error(`Failed to load ${key} from storage:`, e)
-  }
-  return fallback
-}
-
-// Reactive state
-export const photos = ref<PhotoItem[]>(loadFromStorage<PhotoItem[]>(STORAGE_KEYS.PHOTOS, DEFAULT_PHOTOS))
-export const weddingInfo = ref<WeddingInfo>(loadFromStorage<WeddingInfo>(STORAGE_KEYS.INFO, DEFAULT_WEDDING_INFO))
-export const accounts = ref<AccountItem[]>(loadFromStorage<AccountItem[]>(STORAGE_KEYS.ACCOUNTS, DEFAULT_ACCOUNTS))
-export const rsvpList = ref<RsvpItem[]>(loadFromStorage<RsvpItem[]>(STORAGE_KEYS.RSVP, []))
-export const guestbook = ref<GuestbookItem[]>(loadFromStorage<GuestbookItem[]>(STORAGE_KEYS.GUESTBOOK, DEFAULT_GUESTBOOK))
-export const adminSettings = ref<AdminSettings>(loadFromStorage<AdminSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_ADMIN_SETTINGS))
-function loadInitialLiveSnaps(): LiveSnapItem[] {
-  const loaded = loadFromStorage<LiveSnapItem[]>(STORAGE_KEYS.LIVESNAPS, DEFAULT_LIVE_SNAPS)
-  if (!loaded || loaded.length === 0) return DEFAULT_LIVE_SNAPS
-  // If only old default dummy items were stored, upgrade to the new varied default snaps
-  const isAllDefaultDummies = loaded.every(s => s.id.startsWith('snap-'))
-  if (isAllDefaultDummies && loaded.length < DEFAULT_LIVE_SNAPS.length) {
+// 보안 강화: 브라우저 localStorage에 남아있는 과거 민감 데이터(개인정보, 계좌, RSVP, 관리자 설정 등) 전면 파기
+if (typeof window !== 'undefined' && window.localStorage) {
+  const SENSITIVE_STORAGE_KEYS = [
+    'wedding_photos_v2',
+    'wedding_info_v2',
+    'wedding_accounts_v2',
+    'wedding_rsvp_v1',
+    'wedding_guestbook_v1',
+    'wedding_admin_settings_v2',
+    'wedding_livesnaps_v1',
+    'wedding_photos',
+    'wedding_info',
+    'wedding_accounts',
+    'wedding_rsvp',
+    'wedding_guestbook',
+    'wedding_admin_settings',
+    'wedding_livesnaps',
+    'wedding_gallery_likes',
+    'wedding_my_guestbook_posts',
+    'wedding_admin_session_expiry'
+  ]
+  SENSITIVE_STORAGE_KEYS.forEach((key) => {
     try {
-      localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(DEFAULT_LIVE_SNAPS))
+      localStorage.removeItem(key)
     } catch (_) {}
-    return DEFAULT_LIVE_SNAPS
-  }
-  return loaded
+  })
 }
 
-export const liveSnaps = ref<LiveSnapItem[]>(loadInitialLiveSnaps())
+// Reactive in-memory state (보안을 위해 localStorage에 저장하지 않고 인메모리 및 Firebase Firestore 실시간 연동으로만 관리)
+export const photos = ref<PhotoItem[]>(JSON.parse(JSON.stringify(DEFAULT_PHOTOS)))
+export const weddingInfo = ref<WeddingInfo>(JSON.parse(JSON.stringify(DEFAULT_WEDDING_INFO)))
+export const accounts = ref<AccountItem[]>(JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)))
+export const rsvpList = ref<RsvpItem[]>([])
+export const guestbook = ref<GuestbookItem[]>(JSON.parse(JSON.stringify(DEFAULT_GUESTBOOK)))
+export const adminSettings = ref<AdminSettings>(JSON.parse(JSON.stringify(DEFAULT_ADMIN_SETTINGS)))
+export const liveSnaps = ref<LiveSnapItem[]>(JSON.parse(JSON.stringify(DEFAULT_LIVE_SNAPS)))
 
 // 메신저 및 SNS 공유 미리보기용 Open Graph / Twitter 메타 태그 동적 갱신 헬퍼
 export function updateOpenGraphMeta(imageUrl?: string) {
@@ -182,44 +174,20 @@ function triggerCloudSave() {
   }, 1000)
 }
 
-// Watchers to auto-persist to LocalStorage & Firestore
-watch(photos, (val) => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.PHOTOS, JSON.stringify(val))
-  } catch (e) {
-    console.warn('Storage quota warning when saving photos:', e)
-  }
+// Watchers to auto-persist to Firestore (localStorage 저장 제거)
+watch(photos, () => {
   triggerCloudSave()
 }, { deep: true })
 
-watch(weddingInfo, (val) => {
-  localStorage.setItem(STORAGE_KEYS.INFO, JSON.stringify(val))
+watch(weddingInfo, () => {
   triggerCloudSave()
 }, { deep: true })
 
-watch(accounts, (val) => {
-  localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(val))
+watch(accounts, () => {
   triggerCloudSave()
-}, { deep: true })
-
-watch(rsvpList, (val) => {
-  localStorage.setItem(STORAGE_KEYS.RSVP, JSON.stringify(val))
-}, { deep: true })
-
-watch(guestbook, (val) => {
-  localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(val))
-}, { deep: true })
-
-watch(liveSnaps, (val) => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(val))
-  } catch (e) {
-    console.warn('Storage quota warning when saving live snaps:', e)
-  }
 }, { deep: true })
 
 watch(adminSettings, (val) => {
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(val))
   if (val.useFirebase && val.firebaseConfig?.apiKey) {
     initFirebase(val.firebaseConfig)
     initCloudSubscriptions()
@@ -344,13 +312,8 @@ export function updatePhotoLikes(id: string, delta: number) {
   const photo = photos.value.find(p => p.id === id)
   if (photo) {
     photo.likes = Math.max(0, (photo.likes || 0) + delta)
-    try {
-      localStorage.setItem(STORAGE_KEYS.PHOTOS, JSON.stringify(photos.value))
-      if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
-        forceUploadToCloud().catch(() => {})
-      }
-    } catch (e) {
-      console.warn('Failed to save photo likes:', e)
+    if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
+      forceUploadToCloud().catch(() => {})
     }
   }
 }
@@ -426,7 +389,6 @@ export function addGuestbookEntry(entry: Omit<GuestbookItem, 'id' | 'createdAt'>
     createdAt: new Date().toISOString()
   }
   guestbook.value.unshift(newItem)
-  localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
   if (isFirestoreReady()) {
     saveGuestbookDoc(newItem).catch(err => console.warn('방명록 Firestore 저장 실패:', err))
   }
@@ -448,7 +410,6 @@ export function deleteGuestbookEntry(id: string, inputPass?: string, isAdmin = f
   const isMatch = isAdmin || (!!inputPass && verifyPassword(inputPass, target.password || ''))
   if (isMatch) {
     guestbook.value.splice(index, 1)
-    localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
     if (isFirestoreReady()) {
       deleteGuestbookDoc(id).catch(err => console.warn('방명록 Firestore 삭제 실패:', err))
     }
@@ -461,7 +422,6 @@ export function toggleGuestbookVisibility(id: string): boolean {
   const item = guestbook.value.find(g => g.id === id)
   if (!item) return false
   item.isHidden = !item.isHidden
-  localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(guestbook.value))
   if (isFirestoreReady()) {
     saveGuestbookDoc(item).catch(err => console.warn('방명록 가시성 Firestore 동기화 실패:', err))
   }
@@ -498,16 +458,13 @@ export function initCloudSubscriptions() {
       try {
         if (cloudData.weddingInfo) {
           weddingInfo.value = cloudData.weddingInfo
-          localStorage.setItem(STORAGE_KEYS.INFO, JSON.stringify(cloudData.weddingInfo))
         }
         if (cloudData.photos && Array.isArray(cloudData.photos)) {
           photos.value = cloudData.photos
           ensureCoverPhotoFirst()
-          localStorage.setItem(STORAGE_KEYS.PHOTOS, JSON.stringify(photos.value))
         }
         if (cloudData.accounts && Array.isArray(cloudData.accounts)) {
           accounts.value = cloudData.accounts
-          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudData.accounts))
         }
         if (cloudData.adminSettings) {
           adminSettings.value = {
@@ -517,7 +474,6 @@ export function initCloudSubscriptions() {
               ? cloudData.adminSettings.firebaseConfig
               : adminSettings.value.firebaseConfig
           }
-          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(adminSettings.value))
         }
         lastCloudSyncTime.value = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         isCloudConnected.value = true
@@ -539,7 +495,6 @@ export function initCloudSubscriptions() {
       try {
         if (items) {
           guestbook.value = items
-          localStorage.setItem(STORAGE_KEYS.GUESTBOOK, JSON.stringify(items))
         }
       } finally {
         setTimeout(() => {
@@ -556,7 +511,6 @@ export function initCloudSubscriptions() {
       try {
         if (items && items.length > 0) {
           rsvpList.value = items
-          localStorage.setItem(STORAGE_KEYS.RSVP, JSON.stringify(items))
         }
       } finally {
         setTimeout(() => {
@@ -573,9 +527,6 @@ export function initCloudSubscriptions() {
       try {
         if (items) {
           liveSnaps.value = items
-          try {
-            localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(items))
-          } catch (_) {}
         }
       } finally {
         setTimeout(() => {
@@ -584,17 +535,6 @@ export function initCloudSubscriptions() {
       }
     })
   }
-}
-
-// 브라우저 탭 간 실시간 동기화 (관리자 페이지에서 삭제/추가 시 청첩장 탭 즉시 반영)
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEYS.LIVESNAPS && e.newValue) {
-      try {
-        liveSnaps.value = JSON.parse(e.newValue)
-      } catch (_) {}
-    }
-  })
 }
 
 // 수동 클라우드 업로드 / 다운로드 함수
@@ -914,11 +854,6 @@ export function addLiveSnap(snap: Omit<LiveSnapItem, 'id' | 'createdAt'>): LiveS
     createdAt: new Date().toISOString()
   }
   liveSnaps.value.unshift(newItem)
-  try {
-    localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(liveSnaps.value))
-  } catch (e) {
-    console.warn('LocalStorage save error for live snap:', e)
-  }
   if (isFirestoreReady()) {
     saveLiveSnapDoc(newItem).catch(err => console.warn('현장스냅 Firestore 저장 실패:', err))
   }
@@ -935,11 +870,6 @@ export function deleteLiveSnap(id: string) {
   const index = liveSnaps.value.findIndex(s => s.id === id)
   if (index !== -1) {
     liveSnaps.value.splice(index, 1)
-    try {
-      localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(liveSnaps.value))
-    } catch (e) {
-      console.warn('LocalStorage error deleting snap:', e)
-    }
     if (isFirestoreReady()) {
       deleteLiveSnapDoc(id).catch(err => console.warn('현장스냅 Firestore 삭제 실패:', err))
     }
@@ -950,11 +880,6 @@ export function toggleLiveSnapVisibility(id: string): boolean {
   const snap = liveSnaps.value.find(s => s.id === id)
   if (snap) {
     snap.isHidden = !snap.isHidden
-    try {
-      localStorage.setItem(STORAGE_KEYS.LIVESNAPS, JSON.stringify(liveSnaps.value))
-    } catch (e) {
-      console.warn('LocalStorage save error:', e)
-    }
     if (isFirestoreReady()) {
       saveLiveSnapDoc(snap).catch(err => console.warn('현장스냅 상태 Firestore 저장 실패:', err))
     }

@@ -51,10 +51,7 @@ export async function loginKakaoAccount(): Promise<{ success: boolean; message: 
     }
   }
 
-  // 2. 키 변경 사항을 로컬스토리지에 즉시 동기화
-  localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
-
-  // 3. SDK 초기화
+  // 2. SDK 초기화
   const initialized = initKakaoSdk(jsKey)
   if (!initialized) {
     return {
@@ -109,8 +106,7 @@ export async function loginKakaoAccount(): Promise<{ success: boolean; message: 
           adminSettings.value.kakaoTokenExpiresAt = Date.now() + expiresIn * 1000
           adminSettings.value.kakaoConnectedAccount = nickname
 
-          // 로컬스토리지 및 클라우드 동기화
-          localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+          // 클라우드 동기화
           if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
             await forceUploadToCloud()
           }
@@ -198,8 +194,7 @@ export async function refreshKakaoAccessToken(): Promise<string | null> {
       adminSettings.value.kakaoRefreshToken = data.refresh_token
     }
 
-    // 로컬스토리지 및 클라우드 저장
-    localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
+    // 클라우드 저장
     if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
       forceUploadToCloud().catch(() => {})
     }
@@ -248,7 +243,6 @@ export async function disconnectKakaoAccount(): Promise<void> {
   adminSettings.value.kakaoTokenExpiresAt = 0
   adminSettings.value.kakaoConnectedAccount = ''
 
-  localStorage.setItem('wedding_admin_settings_v2', JSON.stringify(adminSettings.value))
   if (adminSettings.value.useFirebase && adminSettings.value.firebaseConfig?.apiKey) {
     await forceUploadToCloud()
   }
