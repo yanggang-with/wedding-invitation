@@ -13,6 +13,24 @@ const newAccount = ref<Omit<AccountItem, 'id'>>({
   kakaoPayUrl: ''
 })
 
+const isAddModalOpen = ref(false)
+
+const openAddModal = () => {
+  newAccount.value = {
+    side: 'groom',
+    title: '',
+    bankName: '',
+    accountNumber: '',
+    accountHolder: '',
+    kakaoPayUrl: ''
+  }
+  isAddModalOpen.value = true
+}
+
+const closeAddModal = () => {
+  isAddModalOpen.value = false
+}
+
 // Edit state
 const editingId = ref<string | null>(null)
 const editForm = ref<AccountItem>({
@@ -36,14 +54,7 @@ const handleAddAccount = () => {
     id: 'acc_' + Date.now()
   })
 
-  newAccount.value = {
-    side: 'groom',
-    title: '',
-    bankName: '',
-    accountNumber: '',
-    accountHolder: '',
-    kakaoPayUrl: ''
-  }
+  closeAddModal()
 }
 
 const startEdit = (item: AccountItem) => {
@@ -79,78 +90,11 @@ const handleDeleteAccount = (id: string) => {
 <template>
   <div class="account-manager font-sans">
     <div class="manager-header">
-      <div>
+      <div class="manager-header-info">
         <h3 class="manager-title font-serif">마음 전하실 곳 (계좌번호) 관리</h3>
         <p class="manager-desc">신랑/신부 및 혼주 계좌번호와 카카오페이 송금 링크를 등록하거나 수정할 수 있습니다.</p>
       </div>
-    </div>
-
-    <!-- Add New Account Form -->
-    <div class="card-paper add-box">
-      <h4 class="box-title font-serif">새 계좌번호 추가</h4>
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">구분 측</label>
-          <select v-model="newAccount.side" class="input-field">
-            <option value="groom">신랑</option>
-            <option value="groomParents">신랑 혼주</option>
-            <option value="bride">신부</option>
-            <option value="brideParents">신부 혼주</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">표시 타이틀</label>
-          <input
-            v-model="newAccount.title"
-            type="text"
-            placeholder="예: 신랑 경주원 / 신랑 혼주 (부)"
-            class="input-field"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">은행명</label>
-          <input
-            v-model="newAccount.bankName"
-            type="text"
-            placeholder="예: 우리은행"
-            class="input-field"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">계좌번호</label>
-          <input
-            v-model="newAccount.accountNumber"
-            type="text"
-            placeholder="예: 1002-000-000000"
-            class="input-field"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">예금주 성함</label>
-          <input
-            v-model="newAccount.accountHolder"
-            type="text"
-            placeholder="예: 경주원"
-            class="input-field"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">카카오페이 송금 링크 (선택)</label>
-          <input
-            v-model="newAccount.kakaoPayUrl"
-            type="url"
-            placeholder="https://qr.kakaopay.com/..."
-            class="input-field"
-          />
-        </div>
-      </div>
-
-      <button class="btn-primary add-btn" @click="handleAddAccount">
+      <button class="btn-primary add-header-btn" @click="openAddModal">
         <Plus :size="15" />
         <span>계좌 추가하기</span>
       </button>
@@ -158,6 +102,14 @@ const handleDeleteAccount = (id: string) => {
 
     <!-- Existing Accounts List -->
     <div class="accounts-list">
+      <div v-if="accounts.length === 0" class="empty-accounts-card card-paper">
+        <p class="empty-desc">등록된 계좌번호가 없습니다. 아래 버튼을 눌러 계좌번호를 추가해 주세요.</p>
+        <button class="btn-primary" @click="openAddModal">
+          <Plus :size="15" />
+          <span>첫 계좌 추가하기</span>
+        </button>
+      </div>
+
       <div v-for="item in accounts" :key="item.id" class="account-item-card card-paper">
         <!-- View Mode -->
         <div v-if="editingId !== item.id" class="item-view-row">
@@ -250,6 +202,104 @@ const handleDeleteAccount = (id: string) => {
           </div>
         </div>
       </div>
+
+      <!-- Bottom Add Account Trigger Button -->
+      <div v-if="accounts.length > 0" class="list-bottom-action">
+        <button type="button" class="btn-outline-add" @click="openAddModal">
+          <Plus :size="15" />
+          <span>계좌 추가하기</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Add Account Layer Popup Modal -->
+    <div v-if="isAddModalOpen" class="modal-backdrop" @click.self="closeAddModal">
+      <div class="modal-card card-paper">
+        <div class="modal-header">
+          <div class="modal-header-info">
+            <h4 class="modal-title font-serif">새 계좌번호 추가</h4>
+            <p class="modal-subtitle">새로운 입금 계좌를 목록의 하단에 추가합니다.</p>
+          </div>
+          <button class="close-btn" @click="closeAddModal" type="button" title="닫기">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-grid modal-form-grid">
+            <div class="form-group">
+              <label class="form-label">구분 측</label>
+              <select v-model="newAccount.side" class="input-field">
+                <option value="groom">신랑</option>
+                <option value="groomParents">신랑 혼주</option>
+                <option value="bride">신부</option>
+                <option value="brideParents">신부 혼주</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">표시 타이틀</label>
+              <input
+                v-model="newAccount.title"
+                type="text"
+                placeholder="예: 신랑 경주원 / 신랑 혼주 (부)"
+                class="input-field"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">은행명</label>
+              <input
+                v-model="newAccount.bankName"
+                type="text"
+                placeholder="예: 우리은행"
+                class="input-field"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">계좌번호</label>
+              <input
+                v-model="newAccount.accountNumber"
+                type="text"
+                placeholder="예: 1002-000-000000"
+                class="input-field"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">예금주 성함</label>
+              <input
+                v-model="newAccount.accountHolder"
+                type="text"
+                placeholder="예: 경주원"
+                class="input-field"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">카카오페이 송금 링크 (선택)</label>
+              <input
+                v-model="newAccount.kakaoPayUrl"
+                type="url"
+                placeholder="https://qr.kakaopay.com/..."
+                class="input-field"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary modal-btn" @click="closeAddModal">
+            <X :size="14" />
+            <span>취소</span>
+          </button>
+          <button type="button" class="btn-primary modal-btn" @click="handleAddAccount">
+            <Plus :size="14" />
+            <span>추가</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -260,7 +310,175 @@ const handleDeleteAccount = (id: string) => {
 }
 
 .manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.manager-header-info {
+  flex: 1;
+}
+
+.add-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 9px 18px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.empty-accounts-card {
+  padding: 32px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.list-bottom-action {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-outline-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  border: 1px dashed var(--gold-primary);
+  background: rgba(197, 160, 89, 0.05);
+  color: var(--gold-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-add:hover {
+  background: rgba(197, 160, 89, 0.12);
+  border-style: solid;
+}
+
+/* Add Modal Styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  max-width: 520px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-ivory);
+}
+
+.modal-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.close-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-warm);
+}
+
+.modal-body {
+  padding: 22px;
+  max-height: calc(85vh - 120px);
+  overflow-y: auto;
+}
+
+.modal-form-grid {
+  margin-bottom: 0;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border-color);
+  background: #FAF9F6;
+}
+
+.modal-btn {
+  font-size: 13px;
+  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .manager-title {
@@ -472,7 +690,13 @@ const handleDeleteAccount = (id: string) => {
 @media (max-width: 640px) {
   .manager-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .add-header-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .add-account-box {

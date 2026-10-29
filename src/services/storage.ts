@@ -673,7 +673,7 @@ export function formatWeddingDate(dateStr: string, formatPattern?: string, custo
 
 /**
  * Returns an optimized image URL for fast thumbnail rendering.
- * Automatically resizes remote images (such as Unsplash) to lightweight dimensions and quality.
+ * Automatically resizes remote images to lightweight dimensions and quality.
  */
 export function getOptimizedImageUrl(url: string, width = 240, quality = 65): string {
   if (!url) return ''
@@ -688,6 +688,10 @@ export function getOptimizedImageUrl(url: string, width = 240, quality = 65): st
     if (fileIdMatch && fileIdMatch[1]) {
       return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}=w${width}`
     }
+  }
+  // 3. Firebase Storage images: Cloudflare 기반 글로벌 이미지 가속 프록시(wsrv.nl)를 통해 WebP 경량 썸네일로 실시간 변환
+  if (url.startsWith('https://firebasestorage.googleapis.com')) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=${quality}&output=webp`
   }
   return url
 }

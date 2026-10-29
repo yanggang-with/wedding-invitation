@@ -55,6 +55,15 @@ const isSyncing = ref(false)
 const showFirebaseModal = ref(false)
 const loadedAdminThumbs = ref<Record<string, boolean>>({})
 
+const onAdminThumbError = (e: Event, photo: PhotoItem) => {
+  const target = e.target as HTMLImageElement | null
+  if (target && target.src.includes('wsrv.nl') && photo?.url) {
+    target.src = photo.url
+    return
+  }
+  loadedAdminThumbs.value[photo.id] = true
+}
+
 // 모바일 환경에서 탭(터치) 시 액션 버튼 오버레이 토글 상태 관리
 const activeMobilePhotoId = ref<string | null>(null)
 const toggleMobileOverlay = (photoId: string) => {
@@ -700,7 +709,7 @@ onUnmounted(() => {
           </div>
 
           <img
-            :src="photo.url"
+            :src="photo.thumbnailUrl || getOptimizedImageUrl(photo.url, 280, 65)"
             :alt="photo.caption || '웨딩 사진'"
             class="photo-thumb"
             :class="{ 'is-loaded': loadedAdminThumbs[photo.id] }"
@@ -709,6 +718,7 @@ onUnmounted(() => {
             loading="lazy"
             decoding="async"
             @load="loadedAdminThumbs[photo.id] = true"
+            @error="onAdminThumbError($event, photo)"
           />
 
           <!-- Drag Handle Pill (Supports Touch on mobile & Mouse drag on PC) -->
@@ -941,7 +951,7 @@ onUnmounted(() => {
             <div class="thumb-pos-card">
               <div class="mini-1-1-preview-wrap">
                 <img
-                  :src="editForm.url"
+                  :src="getOptimizedImageUrl(editForm.url, 280, 65)"
                   alt="1:1 미리보기"
                   class="mini-1-1-img"
                   :style="{ objectPosition: editForm.objectPosition || 'center center' }"

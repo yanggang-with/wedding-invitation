@@ -40,7 +40,8 @@ import {
   ChevronUp,
   Send,
   LogOut,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-vue-next'
 
 
@@ -55,11 +56,30 @@ if (!adminSettings.value.firebaseConfig) {
   }
 }
 
+const isPinModalOpen = ref(false)
 const currentPin = ref('')
 const newPin = ref('')
 const newPinConfirm = ref('')
 const pinSuccessMsg = ref('')
 const pinErrorMsg = ref('')
+
+const openPinModal = () => {
+  currentPin.value = ''
+  newPin.value = ''
+  newPinConfirm.value = ''
+  pinErrorMsg.value = ''
+  pinSuccessMsg.value = ''
+  isPinModalOpen.value = true
+}
+
+const closePinModal = () => {
+  isPinModalOpen.value = false
+  currentPin.value = ''
+  newPin.value = ''
+  newPinConfirm.value = ''
+  pinErrorMsg.value = ''
+  pinSuccessMsg.value = ''
+}
 
 const firebaseSavedMsg = ref(false)
 const isCheckingConnection = ref(false)
@@ -85,10 +105,8 @@ const handleUpdatePin = () => {
   }
 
   adminSettings.value.adminPin = newPin.value
-  pinSuccessMsg.value = '관리자 비밀번호가 성공적으로 변경되었습니다.'
-  currentPin.value = ''
-  newPin.value = ''
-  newPinConfirm.value = ''
+  alert('관리자 비밀번호가 성공적으로 변경되었습니다.')
+  closePinModal()
 }
 
 // Google Authentication Management
@@ -172,10 +190,14 @@ const handleForceDownload = async () => {
 }
 
 const handleResetSample = () => {
-  if (confirm('모든 데이터를 최초의 고품질 샘플 데이터(프리셋 사진 및 정보)로 초기화하시겠습니까? 현재 변경한 내용은 사라집니다.')) {
-    resetToSampleData()
-    alert('기본 샘플 데이터로 복원되었습니다.')
-  }
+  const firstConfirm = confirm('모든 데이터를 최초의 기본 샘플 데이터(프리셋 사진 및 정보)로 초기화하시겠습니까? 현재 변경한 내용은 사라집니다.')
+  if (!firstConfirm) return
+
+  const secondConfirm = confirm('한 번 더 확인합니다.\n정말로 모든 데이터를 기본 샘플 데이터로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
+  if (!secondConfirm) return
+
+  resetToSampleData()
+  alert('기본 샘플 데이터로 복원되었습니다.')
 }
 
 // Naver Maps API Key Management
@@ -363,53 +385,21 @@ const handleToggleLiveSnapSection = async () => {
 
     <div class="settings-blocks">
       <!-- 1. Change Admin PIN -->
-      <div class="card-paper block-card">
-        <div class="block-title-row">
-          <KeyRound :size="18" class="block-icon" />
-          <h4 class="block-title font-serif">관리자 비밀번호 변경</h4>
+      <div class="card-paper block-card pin-change-card">
+        <div class="pin-card-content">
+          <div class="block-title-row">
+            <KeyRound :size="18" class="block-icon gold" />
+            <h4 class="block-title font-serif">관리자 비밀번호 변경</h4>
+          </div>
+          <p class="block-desc">
+            관리자 페이지 접속에 사용하는 4자리 이상의 PIN 비밀번호를 안전하게 변경합니다.
+          </p>
         </div>
 
-        <form @submit.prevent="handleUpdatePin" class="pin-form">
-          <div class="form-group">
-            <label class="form-label">현재 비밀번호</label>
-            <input
-              v-model="currentPin"
-              type="password"
-              placeholder="현재 비밀번호"
-              class="input-field"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">새 비밀번호</label>
-            <input
-              v-model="newPin"
-              type="password"
-              placeholder="새 비밀번호 (4자리 이상)"
-              class="input-field"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">새 비밀번호 확인</label>
-            <input
-              v-model="newPinConfirm"
-              type="password"
-              placeholder="새 비밀번호 다시 입력"
-              class="input-field"
-              required
-            />
-          </div>
-
-          <p v-if="pinErrorMsg" class="error-msg">{{ pinErrorMsg }}</p>
-          <p v-if="pinSuccessMsg" class="success-msg">{{ pinSuccessMsg }}</p>
-
-          <button type="submit" class="btn-primary sub-btn">
-            비밀번호 변경
-          </button>
-        </form>
+        <button type="button" class="btn-primary pin-trigger-btn" @click="openPinModal">
+          <KeyRound :size="14" />
+          <span>비밀번호 변경</span>
+        </button>
       </div>
 
       <!-- 2. Google Authentication Accounts Integration -->
@@ -1003,20 +993,93 @@ const handleToggleLiveSnapSection = async () => {
 
       <!-- 5. Reset Factory Sample Data -->
       <div class="card-paper block-card danger-zone">
-
-        <div class="block-title-row">
-          <RotateCcw :size="18" class="block-icon danger" />
-          <h4 class="block-title font-serif">기본 샘플 데이터로 복원</h4>
+        <div class="danger-header">
+          <div class="block-title-row">
+            <RotateCcw :size="18" class="block-icon danger" />
+            <h4 class="block-title font-serif">기본 샘플 데이터로 복원</h4>
+          </div>
+          <p class="block-desc">
+            초기 고품질 감성 웨딩 샘플 사진과 기본 예식 정보, 샘플 축하글로 즉시 초기화합니다.
+          </p>
         </div>
 
-        <p class="block-desc">
-          초기 고품질 감성 웨딩 샘플 사진 9장과 기본 예식 정보, 샘플 축하글로 즉시 초기화합니다.
-        </p>
+        <div class="danger-action-row">
+          <button type="button" class="reset-btn" @click="handleResetSample">
+            <RotateCcw :size="14" />
+            <span>샘플 데이터 초기화</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
-        <button class="reset-btn" @click="handleResetSample">
-          <RotateCcw :size="15" />
-          <span>샘플 데이터로 초기화</span>
-        </button>
+    <!-- Admin PIN Change Layer Popup Modal -->
+    <div v-if="isPinModalOpen" class="modal-backdrop" @click.self="closePinModal">
+      <div class="modal-card card-paper">
+        <div class="modal-header">
+          <div class="modal-header-with-icon">
+            <KeyRound :size="18" class="modal-header-icon gold" />
+            <h4 class="modal-title font-serif">관리자 비밀번호 변경</h4>
+          </div>
+          <button class="close-btn" @click="closePinModal" type="button" title="닫기">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <form @submit.prevent="handleUpdatePin">
+          <div class="modal-body">
+            <p class="modal-desc">새로운 관리자 PIN 비밀번호를 설정해 주세요.</p>
+
+            <div class="form-group">
+              <label class="form-label">현재 비밀번호</label>
+              <input
+                v-model="currentPin"
+                type="password"
+                placeholder="현재 비밀번호를 입력하세요"
+                class="input-field"
+                required
+                autocomplete="current-password"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">새 비밀번호</label>
+              <input
+                v-model="newPin"
+                type="password"
+                placeholder="새 비밀번호 (4자리 이상)"
+                class="input-field"
+                required
+                autocomplete="new-password"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">새 비밀번호 확인</label>
+              <input
+                v-model="newPinConfirm"
+                type="password"
+                placeholder="새 비밀번호 다시 입력"
+                class="input-field"
+                required
+                autocomplete="new-password"
+              />
+            </div>
+
+            <p v-if="pinErrorMsg" class="error-msg">{{ pinErrorMsg }}</p>
+            <p v-if="pinSuccessMsg" class="success-msg">{{ pinSuccessMsg }}</p>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary modal-btn" @click="closePinModal">
+              <X :size="14" />
+              <span>취소</span>
+            </button>
+            <button type="submit" class="btn-primary modal-btn">
+              <Check :size="14" />
+              <span>비밀번호 변경</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -1122,11 +1185,152 @@ const handleToggleLiveSnapSection = async () => {
   margin-bottom: 18px;
 }
 
-.pin-form {
+.pin-change-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pin-card-content {
+  flex: 1;
+}
+
+.pin-card-content .block-desc {
+  margin-bottom: 0;
+}
+
+.pin-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.danger-zone {
+  border-left: 3px solid var(--rose-accent, #B85848);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.danger-header .block-desc {
+  margin-bottom: 0;
+}
+
+.danger-action-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* PIN Modal Styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  max-width: 440px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-ivory);
+}
+
+.modal-header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-header-icon {
+  color: var(--gold-primary);
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.close-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-warm);
+}
+
+.modal-body {
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 360px;
+}
+
+.modal-desc {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin: 0 0 4px 0;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
+  background: #FAF9F6;
+}
+
+.modal-btn {
+  font-size: 13px;
+  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .form-group {
@@ -1451,11 +1655,22 @@ input:checked + .slider:before {
     gap: 10px;
   }
 
-  .pin-form {
-    max-width: 100%;
+  .pin-change-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
   }
 
-  .sub-btn {
+  .pin-trigger-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .danger-action-row {
+    justify-content: stretch;
+  }
+
+  .reset-btn {
     width: 100%;
     justify-content: center;
   }

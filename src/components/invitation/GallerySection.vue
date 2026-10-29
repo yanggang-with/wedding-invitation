@@ -7,7 +7,6 @@ import { X, ChevronLeft, ChevronRight, ChevronDown, Play, Pause, Heart } from 'l
 const selectedIndex = ref<number | null>(null)
 const isExpanded = ref(false)
 const isMoreLoading = ref(false)
-const isInitialLoading = ref(true)
 const INITIAL_COUNT = 9
 
 // --- Photo Story Likes Management ---
@@ -71,8 +70,14 @@ const FALLBACK_GALLERY_PHOTOS = [
 ]
 
 const onThumbnailError = (e: Event, id: string, index: number) => {
-  loadedThumbnails.value[id] = true
   const target = e.target as HTMLImageElement | null
+  const currentPhoto = sortedPhotos.value[index]
+  if (target && target.src.includes('wsrv.nl') && currentPhoto?.url) {
+    // CDN 리사이징 실패 시 원본 URL로 안전하게 폴백
+    target.src = currentPhoto.url
+    return
+  }
+  loadedThumbnails.value[id] = true
   if (target && !target.src.includes('images.unsplash.com')) {
     target.src = FALLBACK_GALLERY_PHOTOS[index % FALLBACK_GALLERY_PHOTOS.length]
   }
@@ -479,11 +484,6 @@ const handlePopState = () => {
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('popstate', handlePopState)
-
-  // 청첩장 최초 접속 시 3x3 썸네일 그리드 스켈레톤 로딩 노출 보장 (0.55초 후 페이드인)
-  setTimeout(() => {
-    isInitialLoading.value = false
-  }, 550)
 })
 
 
@@ -521,9 +521,9 @@ onUnmounted(() => {
         @click="handleThumbnailClick(index)"
         @contextmenu.prevent
       >
-        <!-- Skeleton Placeholder while loading initially, from Firebase, or More Loading -->
+        <!-- Skeleton Placeholder while loading from Firebase or More Loading -->
         <div
-          v-if="!loadedThumbnails[photo.id] || isInitialLoading || (isMoreLoading && index >= INITIAL_COUNT)"
+          v-if="!loadedThumbnails[photo.id] || (isMoreLoading && index >= INITIAL_COUNT)"
           class="thumbnail-skeleton"
         >
           <div class="skeleton-shimmer"></div>
@@ -535,7 +535,7 @@ onUnmounted(() => {
           :alt="photo.caption || '웨딩 사진'"
           class="thumbnail-img"
           :style="{ objectPosition: photo.objectPosition || 'center center' }"
-          :class="{ 'is-loaded': loadedThumbnails[photo.id] && !isInitialLoading && (!isMoreLoading || index < INITIAL_COUNT) }"
+          :class="{ 'is-loaded': loadedThumbnails[photo.id] && (!isMoreLoading || index < INITIAL_COUNT) }"
           :loading="index < INITIAL_COUNT ? 'eager' : 'lazy'"
           :fetchpriority="index < INITIAL_COUNT ? 'high' : 'auto'"
           decoding="async"
@@ -693,7 +693,7 @@ onUnmounted(() => {
             <Transition name="photo-fade" mode="out-in">
               <img
                 :key="sortedPhotos[selectedIndex].id"
-                :src="getOptimizedImageUrl(sortedPhotos[selectedIndex].url, 1200, 85)"
+                :src="sortedPhotos[selectedIndex].url"
                 :alt="sortedPhotos[selectedIndex].caption || '웨딩 스토리 사진'"
                 class="story-image"
                 :class="{ 'is-loaded': isStoryImageLoaded }"
