@@ -1,7 +1,7 @@
 # 💍 Wedding Invitation (모바일 청첩장 & 관리자 CMS)
 
 신랑(경주원) ♥ 신부(양예진)의 결혼을 기념하여 개발된 **고품질 반응형 모바일 청첩장 웹 애플리케이션**입니다.  
-Vue 3, TypeScript, Vite 기반의 SPA로 제작되었으며, GitHub Pages 정적 호스팅 환경에서 별도의 서버 없이도 **Firebase(Storage & Firestore)**와 **카카오 비즈니스 알림톡/웹훅 파이프라인**을 통해 실시간 양방향 데이터 동기화 및 푸시 알림을 완벽하게 지원합니다.
+Vue 3, TypeScript, Vite 기반의 SPA로 제작되었으며, GitHub Pages 정적 호스팅 환경에서 별도의 서버 없이도 **Firebase(Storage & Firestore)** 와 **카카오 비즈니스 알림톡/웹훅 파이프라인**을 통해 실시간 양방향 데이터 동기화 및 푸시 알림을 완벽하게 지원합니다.
 
 ---
 
